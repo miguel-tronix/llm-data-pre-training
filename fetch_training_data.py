@@ -4,8 +4,8 @@ import aiofiles
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-from dataclasses import dataclass
+from typing import List, Optional, Dict, Any, ClassVar
+from pydantic import BaseModel, Field, validator, ConfigDict
 from tqdm import tqdm
 import time
 import re
@@ -14,18 +14,59 @@ import re
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-@dataclass
+# --- Pydantic V2 Models ---
+class FileInfo(BaseModel):
+    """Model for file information from Hugging Face API"""
+    path: str = Field(..., description="File path in the repository")
+    type: str = Field(..., description="File type (file or directory)")
+    size: Optional[int] = Field(None, description="File size in bytes")
+    oid: Optional[str] = Field(None, description="Git object ID")
+    
+    model_config = ConfigDict(extra='ignore')  # Ignore extra fields from API
+
+class DownloadConfig(BaseModel):
+    """Configuration for dataset downloading"""
+    repo_id: str = Field(default="monology/pile-uncopyrighted", description="Hugging Face dataset repository ID")
+    raw_data_dir: Path = Field(default=Path("rawdata"), description="Directory to store downloaded files")
+    max_retries: int = Field(default=3, ge=1, le=10, description="Maximum number of retry attempts per file")
+    timeout: int = Field(default=30, ge=5, le=300, description="Request timeout in seconds")
+    file_pattern: Optional[str] = Field(default=None, description="Regex pattern to filter files")
+    
+    @validator('raw_data_dir')
+    def validate_raw_data_dir(cls, v):
+        """Ensure raw data directory is a Path object"""
+        if isinstance(v, str):
+            return Path(v)
+        return v
+
+class DownloadResult(BaseModel):
+    """Result of a download operation"""
+    success: bool = Field(..., description="Whether the download was successful")
+    total_files: int = Field(0, ge=0, description="Total number of files attempted")
+    success_count: int = Field(0, ge=0, description="Number of successfully downloaded files")
+    failed_count: int = Field(0, ge=0, description="Number of failed downloads")
+    download_dir: str = Field(..., description="Directory where files were downloaded")
+    message: Optional[str] = Field(None, description="Additional message or error details")
+    
+    @validator('success_count', 'failed_count')
+    def validate_counts(cls, v, values):
+        """Ensure counts are consistent"""
+        if 'total_files' in values and values['total_files'] != values.get('success_count', 0) + values.get('failed_count', 0):
+            raise ValueError("Total files must equal success_count + failed_count")
+        return v
+
+# --- Hugging Face Dataset Downloader ---
 class HFDatasetDownloader:
-    """Download files from Hugging Face datasets"""
-    repo_id: str = "monology/pile-uncopyrighted"
-    raw_data_dir: Path = Path("rawdata")
-    max_retries: int = 3
-    timeout: int = 30
-    session: Optional[aiohttp.ClientSession] = None
+    """Download files from Hugging Face datasets using Pydantic V2 models"""
+    
+    def __init__(self, config: DownloadConfig):
+        self.config = config
+        self.session: Optional[aiohttp.ClientSession] = None
+        self.file_extensions = [".jsonl", ".jsonl.zst", ".jsonl.gz", ".txt", ".zst"]
     
     async def __aenter__(self):
         self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=self.timeout)
+            timeout=aiohttp.ClientTimeout(total=self.config.timeout)
         )
         return self
     
@@ -33,52 +74,63 @@ class HFDatasetDownloader:
         if self.session:
             await self.session.close()
     
-    async def get_dataset_files(self) -> List[Dict[str, Any]]:
+    async def get_dataset_files(self) -> List[FileInfo]:
         """Get list of files in the dataset from Hugging Face API"""
-        api_url = f"https://huggingface.co/api/datasets/{self.repo_id}/tree/main"
+        api_url = f"https://huggingface.co/api/datasets/{self.config.repo_id}/tree/main"
         
-        for attempt in range(self.max_retries):
+        if self.session is None:
+            raise Exception(f"Session is not available to connect to  {api_url} ")
+
+        for attempt in range(self.config.max_retries):
             try:
                 async with self.session.get(api_url) as response:
                     if response.status == 200:
-                        files = await response.json()
-                        # Filter for data files (assuming they have common extensions)
-                        data_files = [
-                            f for f in files 
-                            if isinstance(f, dict) and 
-                            f.get("type") == "file" and
-                            any(f["path"].endswith(ext) for ext in [".jsonl", ".jsonl.zst", ".jsonl.gz", ".txt", ".zst"])
-                        ]
-                        return data_files
+                        files_data = await response.json()
+                        files = []
+                        
+                        for file_data in files_data:
+                            try:
+                                file_info = FileInfo(**file_data)
+                                # Filter for data files with appropriate extensions
+                                if (file_info.type == "file" and 
+                                    any(file_info.path.endswith(ext) for ext in self.file_extensions)):
+                                    files.append(file_info)
+                            except Exception as e:
+                                logger.debug(f"Skipping invalid file data: {e}")
+                                continue
+                        
+                        return files
                     else:
                         logger.warning(f"API returned status {response.status}, attempt {attempt + 1}")
             except Exception as e:
                 logger.warning(f"Error fetching file list (attempt {attempt + 1}): {e}")
             
-            if attempt < self.max_retries - 1:
+            if attempt < self.config.max_retries - 1:
                 await asyncio.sleep(2 ** attempt)  # Exponential backoff
         
-        raise Exception(f"Failed to get file list after {self.max_retries} attempts")
+        raise Exception(f"Failed to get file list after {self.config.max_retries} attempts")
     
-    async def download_file(self, file_info: Dict[str, Any], progress_bar: Optional[tqdm] = None) -> bool:
+    async def download_file(self, file_info: FileInfo, progress_bar: Optional[tqdm] = None) -> bool:
         """Download a single file from the dataset"""
-        file_path = file_info["path"]
-        file_url = f"https://huggingface.co/datasets/{self.repo_id}/resolve/main/{file_path}"
-        local_path = self.raw_data_dir / file_path
+        file_url = f"https://huggingface.co/datasets/{self.config.repo_id}/resolve/main/{file_info.path}"
+        local_path = self.config.raw_data_dir / file_info.path
         
         # Create directory if it doesn't exist
         local_path.parent.mkdir(parents=True, exist_ok=True)
-        
+        # i
+        if self.session is None:
+            raise Exception(f"Session is not available to connect to  {file_url} ")
+
         # Skip if file already exists and size matches
-        if local_path.exists():
+        if local_path.exists() and file_info.size:
             local_size = local_path.stat().st_size
-            if local_size == file_info.get("size", 0):
+            if local_size == file_info.size:
                 if progress_bar:
                     progress_bar.update(1)
-                logger.info(f"Skipping {file_path} (already exists)")
+                logger.info(f"Skipping {file_info.path} (already exists)")
                 return True
         
-        for attempt in range(self.max_retries):
+        for attempt in range(self.config.max_retries):
             try:
                 async with self.session.get(file_url) as response:
                     if response.status == 200:
@@ -94,49 +146,77 @@ class HFDatasetDownloader:
                                 if progress_bar and total_size > 0:
                                     progress_bar.update(len(chunk))
                         
-                        logger.info(f"Downloaded {file_path} ({downloaded} bytes)")
+                        # Verify download size if we have the expected size
+                        if file_info.size and downloaded != file_info.size:
+                            logger.warning(f"Size mismatch for {file_info.path}: expected {file_info.size}, got {downloaded}")
+                            # We'll still consider it a success for now
+                        
+                        logger.info(f"Downloaded {file_info.path} ({downloaded} bytes)")
                         return True
                     else:
-                        logger.warning(f"Failed to download {file_path}, status {response.status}, attempt {attempt + 1}")
+                        logger.warning(f"Failed to download {file_info.path}, status {response.status}, attempt {attempt + 1}")
             except Exception as e:
-                logger.warning(f"Error downloading {file_path} (attempt {attempt + 1}): {e}")
+                logger.warning(f"Error downloading {file_info.path} (attempt {attempt + 1}): {e}")
             
-            if attempt < self.max_retries - 1:
+            if attempt < self.config.max_retries - 1:
                 await asyncio.sleep(2 ** attempt)  # Exponential backoff
         
-        logger.error(f"Failed to download {file_path} after {self.max_retries} attempts")
+        logger.error(f"Failed to download {file_info.path} after {self.config.max_retries} attempts")
         return False
     
-    async def download_dataset(self, file_pattern: Optional[str] = None) -> Dict[str, Any]:
+    async def download_dataset(self) -> DownloadResult:
         """
         Download all files from the dataset matching the pattern
         
-        Args:
-            file_pattern: Regex pattern to filter files (e.g., r".*train.*\.jsonl\.zst")
-            
         Returns:
-            Dictionary with download statistics
+            DownloadResult with download statistics
         """
         # Ensure rawdata directory exists
-        self.raw_data_dir.mkdir(parents=True, exist_ok=True)
+        self.config.raw_data_dir.mkdir(parents=True, exist_ok=True)
         
         # Get list of files
-        logger.info(f"Fetching file list for {self.repo_id}")
-        files = await self.get_dataset_files()
+        logger.info(f"Fetching file list for {self.config.repo_id}")
+        try:
+            files = await self.get_dataset_files()
+        except Exception as e:
+            return DownloadResult(
+                success=False,
+                total_files=0,
+                success_count=0,
+                failed_count=0,
+                download_dir=str(self.config.raw_data_dir),
+                message=f"Failed to get file list: {e}"
+            )
         
         # Filter files if pattern provided
-        if file_pattern:
-            pattern = re.compile(file_pattern)
-            files = [f for f in files if pattern.search(f["path"])]
+        if self.config.file_pattern:
+            try:
+                pattern = re.compile(self.config.file_pattern)
+                files = [f for f in files if pattern.search(f.path)]
+            except re.error as e:
+                return DownloadResult(
+                    success=False,
+                    total_files=0,
+                    success_count=0,
+                    failed_count=0,
+                    download_dir=str(self.config.raw_data_dir),
+                    message=f"Invalid file pattern: {e}"
+                )
         
         if not files:
-            logger.warning("No files found matching the criteria")
-            return {"success": False, "message": "No files found"}
+            return DownloadResult(
+                success=False,
+                total_files=0,
+                success_count=0,
+                failed_count=0,
+                download_dir=str(self.config.raw_data_dir),
+                message="No files found matching the criteria"
+            )
         
         logger.info(f"Found {len(files)} files to download")
         
         # Calculate total size for progress bar
-        total_size = sum(f.get("size", 0) for f in files)
+        total_size = sum(f.size or 0 for f in files)
         
         # Download files one by one
         success_count = 0
@@ -150,21 +230,23 @@ class HFDatasetDownloader:
                 else:
                     failed_count += 1
         
-        return {
-            "success": True,
-            "total_files": len(files),
-            "success_count": success_count,
-            "failed_count": failed_count,
-            "download_dir": str(self.raw_data_dir)
-        }
+        return DownloadResult(
+            success=failed_count == 0,
+            total_files=len(files),
+            success_count=success_count,
+            failed_count=failed_count,
+            download_dir=str(self.config.raw_data_dir),
+            message='successfully acquired the dataset'
+        )
 
+# --- Main Download Function ---
 async def download_pile_uncopyrighted(
     repo_id: str = "monology/pile-uncopyrighted",
     raw_data_dir: str = "rawdata",
     file_pattern: Optional[str] = None,
     max_retries: int = 3,
     timeout: int = 30
-) -> Dict[str, Any]:
+) -> DownloadResult:
     """
     Main function to download files from the monology/pile-uncopyrighted dataset
     
@@ -176,14 +258,21 @@ async def download_pile_uncopyrighted(
         timeout: Request timeout in seconds
         
     Returns:
-        Dictionary with download statistics
+        DownloadResult with download statistics
     """
-    downloader = HFDatasetDownloader(
+    # Create configuration with validation
+    config = DownloadConfig(
         repo_id=repo_id,
         raw_data_dir=Path(raw_data_dir),
         max_retries=max_retries,
-        timeout=timeout
+        timeout=timeout,
+        file_pattern=file_pattern
     )
     
+    # Create downloader and execute download
+    downloader = HFDatasetDownloader(config)
+    
     async with downloader:
-        return await downloader.download_dataset(file_pattern)
+        return await downloader.download_dataset()
+
+
