@@ -1,7 +1,9 @@
 #
 import asyncio
 from extract_pubmed import run_pubmed_extraction
+from fetch_training_data import download_pile_uncopyrighted
 
+DATASET_URL = "https://h"
 RAWDATA_PATH = "rawdata/"
 PRECLEANDATA_PATH = "precleandata/"
 CLEANDATA_PATH = "cleandata/"
@@ -29,4 +31,5 @@ async def pubmed_abstrac_gen(
 if __name__ == "__main__":
     download_path = "~/llm-data-pre-trainings/rawdata/"
     jsonl_path = "~/llm-data-pre-trainings/pre-clean-data/"
+    asyncio.run(download_pile_uncopyrighted())
     asyncio.run(pubmed_abstrac_gen(download_path,jsonl_path))
