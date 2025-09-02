@@ -38,7 +38,14 @@ async def main():
     download_result = await download_pile_uncopyrighted(
         file_pattern=r".*\.jsonl\.zst"  # Only download gzipped JSONL files
     )
-    
+    result = await download_pile_uncopyrighted(
+    repo_id="monology/pile-uncopyrighted",
+    raw_data_dir=RAWDATA_PATH,
+    file_pattern=r".*\.jsonl\.zst",  # Only download compressed JSONL files
+    max_retries=50,                   # More retries for large files
+    timeout=120,                     # Longer timeout for large files
+    chunk_size=16384                 # Larger chunk size for faster downloads
+    )
     if download_result.success:
         # Extract PubMed abstracts from downloaded files
         extraction_result = await run_pubmed_extraction(
