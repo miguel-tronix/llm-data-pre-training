@@ -5,7 +5,7 @@ import json
 import logging
 from pathlib import Path
 from typing import List, Optional, Dict, Any, ClassVar
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from tqdm import tqdm
 import time
 import re
@@ -33,6 +33,7 @@ class DownloadConfig(BaseModel):
     file_pattern: Optional[str] = Field(default=None, description="Regex pattern to filter files")
     
     @field_validator('raw_data_dir')
+    @classmethod
     def validate_raw_data_dir(cls, v):
         """Ensure raw data directory is a Path object"""
         if isinstance(v, str):
@@ -48,12 +49,12 @@ class DownloadResult(BaseModel):
     download_dir: str = Field(..., description="Directory where files were downloaded")
     message: Optional[str] = Field(None, description="Additional message or error details")
     
-    @field_validator('success_count', 'failed_count')
-    def validate_counts(cls, v, values):
+    @model_validator(mode='after')
+    def validate_counts(self):
         """Ensure counts are consistent"""
-        if 'total_files' in values and values['total_files'] != values.get('success_count', 0) + values.get('failed_count', 0):
+        if self.total_files != self.success_count + self.failed_count:
             raise ValueError("Total files must equal success_count + failed_count")
-        return v
+        return self
 
 # --- Hugging Face Dataset Downloader ---
 class HFDatasetDownloader:
@@ -76,18 +77,20 @@ class HFDatasetDownloader:
     
     async def get_dataset_files(self) -> List[FileInfo]:
         """Get list of files in the dataset from Hugging Face API"""
-        api_url = f"https://huggingface.co/api/datasets/{self.config.repo_id}/tree/main"
-        # Ensure a session is available
+        api_url = f"https://huggingface.co/api/datasets/{self.config.repo_id}/tree/main/train"
+        
         if self.session is None:
-            raise Exception(f"Cannot proceed with file download as session object is None")
+            raise Exception(f"Cannot fetch file information from {api_url}")
         
-        logger.info(f"Fetching dataset from {api_url}")
-        
+        logger.debug(f"Fetching file information from {api_url}")
+
         for attempt in range(self.config.max_retries):
             try:
                 async with self.session.get(api_url) as response:
                     if response.status == 200:
+                        logger.debug(f"Connected to {api_url}")
                         files_data = await response.json()
+                        logger.debug(f"File information retrieved {files_data}")
                         files = []
                         
                         for file_data in files_data:
@@ -116,13 +119,10 @@ class HFDatasetDownloader:
         """Download a single file from the dataset"""
         file_url = f"https://huggingface.co/datasets/{self.config.repo_id}/resolve/main/{file_info.path}"
         local_path = self.config.raw_data_dir / file_info.path
-
-        # Ensure a session is available
+        
         if self.session is None:
-            raise Exception(f"Cannot proceed with file download as session object is None")
-        
-        logger.info(f"Fetching {file_url} and downloading to {local_path}")
-        
+            raise Exception(f"Cannot proceed with file download as session is not available")
+
         # Create directory if it doesn't exist
         local_path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -241,7 +241,7 @@ class HFDatasetDownloader:
             success_count=success_count,
             failed_count=failed_count,
             download_dir=str(self.config.raw_data_dir),
-            message="Successfully acquired dataset"
+            message="Successfully downloaded dataset"
         )
 
 # --- Main Download Function ---
@@ -279,4 +279,3 @@ async def download_pile_uncopyrighted(
     
     async with downloader:
         return await downloader.download_dataset()
-
