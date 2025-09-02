@@ -10,7 +10,7 @@ RAWDATA_PATH = "rawdata/"
 PRECLEANDATA_PATH = "precleandata/"
 CLEANDATA_PATH = "cleandata/"
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -36,7 +36,7 @@ async def pubmed_abstrac_gen(
 async def main():
     # Download the dataset
     download_result = await download_pile_uncopyrighted(
-        file_pattern=r".*\.jsonl\.gz"  # Only download gzipped JSONL files
+        file_pattern=r".*\.jsonl\.zst"  # Only download gzipped JSONL files
     )
     
     if download_result.success:

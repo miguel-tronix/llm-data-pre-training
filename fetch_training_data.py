@@ -11,7 +11,7 @@ import time
 import re
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # --- Pydantic V2 Models ---
@@ -21,6 +21,8 @@ class FileInfo(BaseModel):
     type: str = Field(..., description="File type (file or directory)")
     size: Optional[int] = Field(None, description="File size in bytes")
     oid: Optional[str] = Field(None, description="Git object ID")
+    xetHash: Optional[str] = Field(None, description="Xet Hash")
+    lfs: Optional[dict] = Field(None, description="LFS Object")
     
     model_config = ConfigDict(extra='ignore')  # Ignore extra fields from API
 
@@ -135,7 +137,9 @@ class HFDatasetDownloader:
                 logger.info(f"Skipping {file_info.path} (already exists)")
                 return True
         
-        for attempt in range(self.config.max_retries):
+        #for attempt in range(self.config.max_retries):
+        attempt = 0
+        while(True):
             try:
                 async with self.session.get(file_url) as response:
                     if response.status == 200:
@@ -157,17 +161,19 @@ class HFDatasetDownloader:
                             # We'll still consider it a success for now
                         
                         logger.info(f"Downloaded {file_info.path} ({downloaded} bytes)")
-                        return True
+                        break
+                        #return True
                     else:
                         logger.warning(f"Failed to download {file_info.path}, status {response.status}, attempt {attempt + 1}")
             except Exception as e:
-                logger.warning(f"Error downloading {file_info.path} (attempt {attempt + 1}): {e}")
+                attempt = attempt + 1
+                logger.warning(f"Error downloading {file_info.path} (attempt { attempt }): {e}")
             
-            if attempt < self.config.max_retries - 1:
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+            #if attempt < self.config.max_retries - 1:
+            #    await asyncio.sleep(2 ** attempt)  # Exponential backoff
         
-        logger.error(f"Failed to download {file_info.path} after {self.config.max_retries} attempts")
-        return False
+        #logger.error(f"Failed to download {file_info.path} after {self.config.max_retries} attempts")
+        return True
     
     async def download_dataset(self) -> DownloadResult:
         """
@@ -232,6 +238,7 @@ class HFDatasetDownloader:
                 success = await self.download_file(file_info, pbar)
                 if success:
                     success_count += 1
+                    break
                 else:
                     failed_count += 1
         

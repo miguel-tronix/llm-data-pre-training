@@ -11,3 +11,8 @@ wheels/
 
 #UV stuff
 uv.lock
+
+# Data files
+*.zst
+rawdata/
+precleandata/
