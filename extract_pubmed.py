@@ -3,13 +3,14 @@ import aiofiles
 import json
 import gzip
 import re
-from typing import List, Optional, Dict, Any, ClassVar
+from typing import List, Optional, Dict, Any, Pattern
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime
 import hashlib
 from enum import Enum
+from 
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -65,7 +66,7 @@ class PubMedAbstractExtractor:
     """Extract PubMed abstracts from Pile-Uncopyrighted dataset using Pydantic V2"""
     
     def __init__(self):
-        self.pubmed_pattern: ClassVar[re.Pattern] = re.compile(
+        self.pubmed_pattern: Pattern[str] = re.compile(
             r'PMID- (\d+)\nAB  - (.*?)(?=\n[A-Z]{2,4}  -|\n\n|\Z)', 
             re.DOTALL
         )
