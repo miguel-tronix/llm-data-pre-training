@@ -33,29 +33,23 @@ async def pubmed_abstrac_gen(
     # You can then process the abstracts as needed
     #for abstract in abstracts[:5]:
     #    print(f"ID: {abstract.id}, Text length: {len(abstract.abstract_text)}")
-
 async def main():
     # Download the dataset
-    download_result : Dict[str,Any] = await download_pile_uncopyrighted(
+    download_result = await download_pile_uncopyrighted(
         file_pattern=r".*\.jsonl\.gz"  # Only download gzipped JSONL files
     )
-    try:
-        if isinstance(download_result, Dict) and download_result['success']:
-            # Extract PubMed abstracts from downloaded files
-            extraction_result = await run_pubmed_extraction(
-                input_path=str(download_result['download_dir']),
-                output_path="pubmed_abstracts.jsonl"
-            )
-            return extraction_result
-        else:
-            logger.error(f"Download failed: {download_result['message']}")
-            return None
-    except KeyError as e:
-        logger.error(f"The key {e} was not found in dictionary {download_result}")
+    
+    if download_result.success:
+        # Extract PubMed abstracts from downloaded files
+        extraction_result = await run_pubmed_extraction(
+            input_path=RAWDATA_PATH,
+            output_path=f"{CLEANDATA_PATH}/pubmed_abstracts.jsonl"
+        )
+        return extraction_result
+    else:
+        logger.error(f"Download failed: {download_result.message}")
         return None
 
 if __name__ == "__main__":
-    download_path = RAWDATA_PATH
-    jsonl_path = PRECLEANDATA_PATH
     asyncio.run(main())
     
