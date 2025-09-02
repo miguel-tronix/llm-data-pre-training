@@ -59,10 +59,6 @@ class PubMedAbstract(BaseModel):
         if not v:
             raise ValueError("ID cannot be empty")
         return v
-    
-    def model_dump_json(self, **kwargs) -> str:
-        """Override to ensure proper JSON serialization"""
-        return super().model_dump_json(ensure_ascii=False, **kwargs)
 
 # --- PubMed Abstract Extractor ---
 class PubMedAbstractExtractor:
@@ -162,6 +158,7 @@ class PubMedAbstractExtractor:
                                     source_format=SourceFormat.JSONL
                                 )
                                 
+                                # Use model_dump_json() - Pydantic V2 handles Unicode properly
                                 json_size = len(pubmed_abstract.model_dump_json().encode('utf-8'))
                                 
                                 if current_size + json_size > max_size:
@@ -189,6 +186,7 @@ class PubMedAbstractExtractor:
                             source_format=SourceFormat.TEXT
                         )
                         
+                        # Use model_dump_json() - Pydantic V2 handles Unicode properly
                         json_size = len(pubmed_abstract.model_dump_json().encode('utf-8'))
                         
                         if current_size + json_size > max_size:
@@ -230,6 +228,7 @@ class PubMedAbstractExtractor:
                     source_format=SourceFormat.TEXT
                 )
                 
+                # Pydantic V2's model_dump_json() handles Unicode properly by default
                 json_line = pubmed_abstract.model_dump_json() + '\n'
                 line_size = len(json_line.encode('utf-8'))
                 
@@ -272,6 +271,7 @@ class PubMedAbstractExtractor:
                             source_format=SourceFormat.JSONL
                         )
                         
+                        # Pydantic V2's model_dump_json() handles Unicode properly by default
                         json_line = pubmed_abstract.model_dump_json() + '\n'
                         line_size = len(json_line.encode('utf-8'))
                         
@@ -284,7 +284,7 @@ class PubMedAbstractExtractor:
                         
                         if self.valid_count % 1000 == 0:
                             logger.info(f"Extracted {self.valid_count} abstracts, "
-                                       f"current size: {current_size/1024/1024:.2f}MB")
+                                       f"current size: {current_size//1024//1024}MB")
                 
             except json.JSONDecodeError:
                 self.invalid_count += 1
@@ -363,4 +363,3 @@ async def run_pubmed_extraction(
         stats = await extractor.extract_abstracts_to_file(input_path, output_path)
         logger.info("Extraction completed successfully!")
         return stats
-
