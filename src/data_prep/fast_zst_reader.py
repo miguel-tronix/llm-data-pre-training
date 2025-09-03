@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class ParallelZstdJsonlReader:
     """Parallel reader for Zstandard-compressed JSONL files using memory mapping"""
     
-    def __init__(self, file_path: Path, num_processes: int = None, chunk_size: int = 1024 * 1024):
+    def __init__(self, file_path: Path, num_processes: int = 1, chunk_size: int = 1024 * 1024):
         self.file_path = file_path
         self.num_processes = num_processes or mp.cpu_count()
         self.chunk_size = chunk_size  # Size of chunks to process in bytes
@@ -134,7 +134,7 @@ class ParallelZstdJsonlReader:
             yield batch
 
 # --- Example usage ---
-def process_large_zstd_file_parallel(file_path: Path, num_processes: int = None):
+def process_large_zstd_file_parallel(file_path: Path, num_processes: int = 1):
     """
     Example function to process a large Zstandard-compressed JSONL file in parallel
     """
@@ -152,7 +152,7 @@ def process_large_zstd_file_parallel(file_path: Path, num_processes: int = None)
     
     logger.info(f"Finished processing. Total records: {total_records}")
 
-def process_in_parallel_batches(file_path: Path, num_processes: int = None, batch_size: int = 1000):
+def process_in_parallel_batches(file_path: Path, num_processes: int = 1, batch_size: int = 1000):
     """
     Process the file in parallel and process results in batches
     """
@@ -171,7 +171,7 @@ def process_in_parallel_batches(file_path: Path, num_processes: int = None, batc
     logger.info(f"Finished processing. Total records: {total_records}")
 
 # Integration with your existing pipeline
-async def process_downloaded_files_parallel(download_result, num_processes: int = None):
+async def process_downloaded_files_parallel(download_result, num_processes: int = 1):
     """
     Process files downloaded by the Hugging Face downloader using parallel processing
     """
