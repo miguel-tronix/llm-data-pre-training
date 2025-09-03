@@ -22,8 +22,6 @@ class FileInfo(BaseModel):
     type: str = Field(..., description="File type (file or directory)")
     size: Optional[int] = Field(None, description="File size in bytes")
     oid: Optional[str] = Field(None, description="Git object ID")
-    xetHash: Optional[str] = Field(None, description="Xet Hash")
-    lfs: Optional[dict] = Field(None, description="LFS metadata")
     
     model_config = ConfigDict(extra='ignore')  # Ignore extra fields from API
 
@@ -35,6 +33,7 @@ class DownloadConfig(BaseModel):
     timeout: int = Field(default=30, ge=5, le=300, description="Request timeout in seconds")
     file_pattern: Optional[str] = Field(default=None, description="Regex pattern to filter files")
     chunk_size: int = Field(default=8192, ge=1024, le=65536, description="Chunk size for downloading")
+    max_files: Optional[int] = Field(default=None, ge=1, description="Maximum number of files to download")
     
     @field_validator('raw_data_dir')
     @classmethod
@@ -82,10 +81,11 @@ class HFDatasetDownloader:
     async def get_dataset_files(self) -> List[FileInfo]:
         """Get list of files in the dataset from Hugging Face API"""
         api_url = f"https://huggingface.co/api/datasets/{self.config.repo_id}/tree/main/train"
+
         if self.session is None:
-            raise Exception(f"Cannot connect to {api_url} as session is not available")
+            raise Exception(f"Cannot query {api_url} as session is not available")
         
-        logger.debug(f"Getting datasets from {api_url}")
+        logger.debug(f"Getting dataset metadata from {api_url}")
         
         for attempt in range(self.config.max_retries):
             try:
@@ -120,9 +120,7 @@ class HFDatasetDownloader:
         """Check if the server supports resume (Range requests)"""
         if self.session is None:
             raise Exception(f"Cannot download {url} as session is not available")
-        
-        logger.debug(f"Resuming downloading {url} ")
-        
+        logger.debug("Checking if the download can be resumed")
         try:
             async with self.session.head(url) as response:
                 return response.headers.get('Accept-Ranges') == 'bytes'
@@ -133,39 +131,39 @@ class HFDatasetDownloader:
         """Download a single file from the dataset with resume support"""
         file_url = f"https://huggingface.co/datasets/{self.config.repo_id}/resolve/main/{file_info.path}"
         local_path = self.config.raw_data_dir / file_info.path
-        
         if self.session is None:
             raise Exception(f"Cannot download {file_url} as session is not available")
         
         logger.debug(f"Downloading {file_url} to {local_path}")
+        
         # Create directory if it doesn't exist
         local_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Check if we can resume the download
-        resume_supported = await self.check_resume_support(file_url)
-        start_byte = 0
-        
-        # If file exists, check if we can resume
-        if local_path.exists():
-            local_size = local_path.stat().st_size
-            
-            # If we have the complete file, skip
-            if file_info.size and local_size == file_info.size:
-                if progress_bar:
-                    progress_bar.update(file_info.size)
-                logger.info(f"Skipping {file_info.path} (already exists and complete)")
-                return True
-            
-            # If resume is supported and we have a partial file, resume
-            if resume_supported and local_size > 0:
-                start_byte = local_size
-                logger.info(f"Resuming download of {file_info.path} from byte {start_byte}")
-            else:
-                # Can't resume, so remove the partial file and start over
-                local_path.unlink()
-                logger.info(f"Starting fresh download of {file_info.path}")
-        
         for attempt in range(self.config.max_retries):
+            # Check if we can resume the download
+            resume_supported = await self.check_resume_support(file_url)
+            start_byte = 0
+            
+            # If file exists, check if we can resume
+            if local_path.exists():
+                local_size = local_path.stat().st_size
+                
+                # If we have the complete file, skip
+                if file_info.size and local_size == file_info.size:
+                    if progress_bar:
+                        progress_bar.update(file_info.size)
+                    logger.info(f"Skipping {file_info.path} (already exists and complete)")
+                    return True
+                
+                # If resume is supported and we have a partial file, resume
+                if resume_supported and local_size > 0:
+                    start_byte = local_size
+                    logger.info(f"Resuming download of {file_info.path} from byte {start_byte}")
+                else:
+                    # Can't resume, so remove the partial file and start over
+                    local_path.unlink()
+                    logger.info(f"Starting fresh download of {file_info.path}")
+            
             try:
                 headers = {}
                 if start_byte > 0 and resume_supported:
@@ -196,7 +194,7 @@ class HFDatasetDownloader:
                             logger.warning(f"Size mismatch for {file_info.path}: expected {file_info.size}, got {downloaded}")
                             # Check if we should retry or continue
                             if attempt < self.config.max_retries - 1:
-                                await asyncio.sleep(1 ** attempt)
+                                await asyncio.sleep(2 ** attempt)
                                 continue
                         
                         logger.info(f"Downloaded {file_info.path} ({downloaded} bytes)")
@@ -207,7 +205,7 @@ class HFDatasetDownloader:
                 logger.warning(f"Error downloading {file_info.path} (attempt {attempt + 1}): {e}")
             
             if attempt < self.config.max_retries - 1:
-                await asyncio.sleep(1 ** attempt)  # Exponential backoff
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
         
         logger.error(f"Failed to download {file_info.path} after {self.config.max_retries} attempts")
         return False
@@ -261,6 +259,11 @@ class HFDatasetDownloader:
                 message="No files found matching the criteria"
             )
         
+        # Apply max_files limit if specified
+        if self.config.max_files is not None:
+            files = files[:self.config.max_files]
+            logger.info(f"Limiting download to {self.config.max_files} files")
+        
         logger.info(f"Found {len(files)} files to download")
         
         # Calculate total size for progress bar
@@ -275,7 +278,6 @@ class HFDatasetDownloader:
                 success = await self.download_file(file_info, pbar)
                 if success:
                     success_count += 1
-                    break
                 else:
                     failed_count += 1
         
@@ -295,7 +297,8 @@ async def download_pile_uncopyrighted(
     file_pattern: Optional[str] = None,
     max_retries: int = 3,
     timeout: int = 30,
-    chunk_size: int = 8192
+    chunk_size: int = 8192,
+    max_files: Optional[int] = None
 ) -> DownloadResult:
     """
     Main function to download files from the monology/pile-uncopyrighted dataset
@@ -307,6 +310,7 @@ async def download_pile_uncopyrighted(
         max_retries: Maximum number of retry attempts per file
         timeout: Request timeout in seconds
         chunk_size: Chunk size for downloading
+        max_files: Maximum number of files to download (None for no limit)
         
     Returns:
         DownloadResult with download statistics
@@ -318,7 +322,8 @@ async def download_pile_uncopyrighted(
         max_retries=max_retries,
         timeout=timeout,
         file_pattern=file_pattern,
-        chunk_size=chunk_size
+        chunk_size=chunk_size,
+        max_files=max_files
     )
     
     # Create downloader and execute download
