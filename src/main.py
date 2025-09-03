@@ -4,11 +4,11 @@ import logging
 from typing import Dict, Any
 from data_fetch.fetch_raw_data import download_pile_uncopyrighted
 from data_prep.extract_pubmed import run_pubmed_extraction
-
+BASEDATA_PATH = "/home/migtronix/llm-data-pre-training"
 DATASET_URL = "https://h"
-RAWDATA_PATH = "../rawdata"
-PRECLEANDATA_PATH = "../precleandata"
-CLEANDATA_PATH = "../cleandata"
+RAWDATA_PATH = f"{BASEDATA_PATH}/rawdata"
+PRECLEANDATA_PATH = f"{BASEDATA_PATH}/precleandata"
+CLEANDATA_PATH = f"{BASEDATA_PATH}/cleandata"
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

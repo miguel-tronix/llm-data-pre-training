@@ -9,4 +9,5 @@ dependencies = [
     "aiohttp>=3.12.15",
     "pydantic>=2.11.7",
     "tqdm>=4.67.1",
+    "zstandard>=0.24.0",
 ]
