@@ -14,5 +14,6 @@ uv.lock
 
 # Data files
 *.zst
+*.jsonl
 rawdata/
 precleandata/
