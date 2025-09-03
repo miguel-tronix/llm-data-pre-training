@@ -2,13 +2,13 @@
 import asyncio
 import logging
 from typing import Dict, Any
-from fetch_training_data import download_pile_uncopyrighted
-from extract_pubmed import run_pubmed_extraction
+from data_fetch.fetch_raw_data import download_pile_uncopyrighted
+from data_prep.extract_pubmed import run_pubmed_extraction
 
 DATASET_URL = "https://h"
-RAWDATA_PATH = "rawdata"
-PRECLEANDATA_PATH = "precleandata"
-CLEANDATA_PATH = "cleandata"
+RAWDATA_PATH = "../rawdata"
+PRECLEANDATA_PATH = "../precleandata"
+CLEANDATA_PATH = "../cleandata"
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
