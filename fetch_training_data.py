@@ -50,6 +50,7 @@ class DownloadResult(BaseModel):
     success_count: int = Field(0, ge=0, description="Number of successfully downloaded files")
     failed_count: int = Field(0, ge=0, description="Number of failed downloads")
     download_dir: str = Field(..., description="Directory where files were downloaded")
+    downloaded_files: List[str] = Field(default_factory=list, description="List of successfully downloaded file paths")
     message: Optional[str] = Field(None, description="Additional message or error details")
     
     @model_validator(mode='after')
@@ -57,6 +58,11 @@ class DownloadResult(BaseModel):
         """Ensure counts are consistent"""
         if self.total_files != self.success_count + self.failed_count:
             raise ValueError("Total files must equal success_count + failed_count")
+        
+        # Also validate that the downloaded_files list matches success_count
+        if len(self.downloaded_files) != self.success_count:
+            raise ValueError("Number of downloaded files must equal success_count")
+            
         return self
 
 # --- Hugging Face Dataset Downloader ---
@@ -81,12 +87,12 @@ class HFDatasetDownloader:
     async def get_dataset_files(self) -> List[FileInfo]:
         """Get list of files in the dataset from Hugging Face API"""
         api_url = f"https://huggingface.co/api/datasets/{self.config.repo_id}/tree/main/train"
-
+        
         if self.session is None:
-            raise Exception(f"Cannot query {api_url} as session is not available")
-        
-        logger.debug(f"Getting dataset metadata from {api_url}")
-        
+            raise Exception(f"No session is available to proceed with downloads")
+
+        logger.debug(f"Getting metadata from {api_url} for datasets")
+
         for attempt in range(self.config.max_retries):
             try:
                 async with self.session.get(api_url) as response:
@@ -119,8 +125,10 @@ class HFDatasetDownloader:
     async def check_resume_support(self, url: str) -> bool:
         """Check if the server supports resume (Range requests)"""
         if self.session is None:
-            raise Exception(f"Cannot download {url} as session is not available")
-        logger.debug("Checking if the download can be resumed")
+            raise Exception(f"No session is available to proceed with downloads")
+        
+        logger.debug(f"checking if we can resume download of {url}")
+        
         try:
             async with self.session.head(url) as response:
                 return response.headers.get('Accept-Ranges') == 'bytes'
@@ -131,11 +139,12 @@ class HFDatasetDownloader:
         """Download a single file from the dataset with resume support"""
         file_url = f"https://huggingface.co/datasets/{self.config.repo_id}/resolve/main/{file_info.path}"
         local_path = self.config.raw_data_dir / file_info.path
+        
         if self.session is None:
-            raise Exception(f"Cannot download {file_url} as session is not available")
+            raise Exception(f"No session is available to proceed with downloads")
         
         logger.debug(f"Downloading {file_url} to {local_path}")
-        
+
         # Create directory if it doesn't exist
         local_path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -205,7 +214,7 @@ class HFDatasetDownloader:
                 logger.warning(f"Error downloading {file_info.path} (attempt {attempt + 1}): {e}")
             
             if attempt < self.config.max_retries - 1:
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                await asyncio.sleep(1 ** attempt)  # Exponential backoff
         
         logger.error(f"Failed to download {file_info.path} after {self.config.max_retries} attempts")
         return False
@@ -231,6 +240,7 @@ class HFDatasetDownloader:
                 success_count=0,
                 failed_count=0,
                 download_dir=str(self.config.raw_data_dir),
+                downloaded_files=[],
                 message=f"Failed to get file list: {e}"
             )
         
@@ -246,6 +256,7 @@ class HFDatasetDownloader:
                     success_count=0,
                     failed_count=0,
                     download_dir=str(self.config.raw_data_dir),
+                    downloaded_files=[],
                     message=f"Invalid file pattern: {e}"
                 )
         
@@ -256,6 +267,7 @@ class HFDatasetDownloader:
                 success_count=0,
                 failed_count=0,
                 download_dir=str(self.config.raw_data_dir),
+                downloaded_files=[],
                 message="No files found matching the criteria"
             )
         
@@ -272,12 +284,14 @@ class HFDatasetDownloader:
         # Download files one by one
         success_count = 0
         failed_count = 0
+        downloaded_files = []
         
         with tqdm(total=total_size, unit='B', unit_scale=True, desc="Downloading") as pbar:
             for file_info in files:
                 success = await self.download_file(file_info, pbar)
                 if success:
                     success_count += 1
+                    downloaded_files.append(file_info.path)
                 else:
                     failed_count += 1
         
@@ -287,7 +301,8 @@ class HFDatasetDownloader:
             success_count=success_count,
             failed_count=failed_count,
             download_dir=str(self.config.raw_data_dir),
-            message="Successfully acquired dataset"
+            downloaded_files=downloaded_files,
+            message="Successfully acquired the dataset"
         )
 
 # --- Main Download Function ---

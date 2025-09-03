@@ -207,7 +207,7 @@ class PubMedAbstractExtractor:
     
     async def _open_input_file(self, input_path: str):
         """Open input file with appropriate handler based on extension"""
-        if input_path.endswith('.gz'):
+        if input_path.endswith('.zst'):
             return await aiofiles.open(input_path, 'rt', encoding='utf-8')
         else:
             return await aiofiles.open(input_path, 'r', encoding='utf-8')
