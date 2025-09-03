@@ -188,13 +188,13 @@ async def process_downloaded_files_parallel(download_result, num_processes: int 
         else:
             logger.info(f"Skipping non-Zstandard file: {full_path}")
 
-if __name__ == "__main__":
+#if __name__ == "__main__":
     # Example usage
     # Replace with your actual file path
-    test_file = Path("path/to/your/file.jsonl.zst")
+#    test_file = Path("path/to/your/file.jsonl.zst")
     
-    if test_file.exists():
+#    if test_file.exists():
         # Use all available CPU cores
-        process_large_zstd_file_parallel(test_file, mp.cpu_count())
-    else:
-        logger.error(f"File not found: {test_file}")
+#        process_large_zstd_file_parallel(test_file, mp.cpu_count())
+#    else:
+#        logger.error(f"File not found: {test_file}")
