@@ -330,36 +330,3 @@ class PubMedAbstractExtractor:
         """Generate a unique ID for the abstract"""
         data_str = json.dumps(data, sort_keys=True)
         return hashlib.md5(data_str.encode()).hexdigest()
-
-# --- Main Extraction Coroutine ---
-async def run_pubmed_extraction(
-    input_path: str, 
-    output_path: Optional[str] = None,
-    return_objects: bool = False
-) -> Any:
-    """
-    Main coroutine to extract PubMed abstracts from Pile-Uncopyrighted dataset
-    
-    Args:
-        input_path: Path to input dataset file
-        output_path: Path to output JSONL file (required if return_objects=False)
-        return_objects: If True, returns list of objects instead of writing to file
-        
-    Returns:
-        Either statistics dict (if writing to file) or list of PubMedAbstract objects
-    """
-    extractor = PubMedAbstractExtractor()
-    
-    logger.info("Starting PubMed abstract extraction...")
-    
-    if return_objects:
-        abstracts = await extractor.extract_abstracts_to_memory(input_path)
-        logger.info(f"Extracted {len(abstracts)} abstracts to memory")
-        return abstracts
-    else:
-        if not output_path:
-            raise ValueError("output_path is required when return_objects=False")
-            
-        stats = await extractor.extract_abstracts_to_file(input_path, output_path)
-        logger.info("Extraction completed successfully!")
-        return stats

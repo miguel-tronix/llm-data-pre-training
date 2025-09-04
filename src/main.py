@@ -1,38 +1,95 @@
 #
 import asyncio
 import logging
-from typing import Dict, Any
-from data_fetch.fetch_raw_data import download_pile_uncopyrighted
-from data_prep.extract_pubmed import run_pubmed_extraction
+from typing import Dict, Any, Optional
+from pathlib import Path
+from data_fetch.fetch_raw_data import DownloadResult, DownloadConfig, HFDatasetDownloader
+from data_prep.extract_pubmed import PubMedAbstractExtractor
 BASEDATA_PATH = "/home/migtronix/llm-data-pre-training"
 DATASET_URL = "https://h"
 RAWDATA_PATH = f"{BASEDATA_PATH}/rawdata"
 PRECLEANDATA_PATH = f"{BASEDATA_PATH}/precleandata"
 CLEANDATA_PATH = f"{BASEDATA_PATH}/cleandata"
+PUBMED_EXTRACT_FILE = "pubmed_abstracts.jsonl"
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
-async def pubmed_abstrac_gen(
-        pubmed_input_path : str ,
-        pubmed_jsonl : str
-) -> None:
+# --- Main Download Function ---
+async def download_pile_uncopyrighted(
+    repo_id: str = "monology/pile-uncopyrighted",
+    raw_data_dir: str = "rawdata",
+    file_pattern: Optional[str] = None,
+    max_retries: int = 3,
+    timeout: int = 30,
+    chunk_size: int = 8192,
+    max_files: Optional[int] = None
+) -> DownloadResult:
     """
-        Extract PubMed abstracts from the path provided and create a JSONL file
-        This routine can be run as a seperate process or thread
+    Main function to download files from the monology/pile-uncopyrighted dataset
+    
+    Args:
+        repo_id: Hugging Face dataset repository ID
+        raw_data_dir: Directory to store downloaded files
+        file_pattern: Regex pattern to filter files
+        max_retries: Maximum number of retry attempts per file
+        timeout: Request timeout in seconds
+        chunk_size: Chunk size for downloading
+        max_files: Maximum number of files to download (None for no limit)
+        
+    Returns:
+        DownloadResult with download statistics
     """
+    # Create configuration with validation
+    config = DownloadConfig(
+        repo_id=repo_id,
+        raw_data_dir=Path(raw_data_dir),
+        max_retries=max_retries,
+        timeout=timeout,
+        file_pattern=file_pattern,
+        chunk_size=chunk_size,
+        max_files=max_files
+    )
     
-    stats = await run_pubmed_extraction(pubmed_input_path, pubmed_jsonl)
-    print(f"Extracted {stats['valid']} abstracts to {pubmed_jsonl}")
+    # Create downloader and execute download
+    downloader = HFDatasetDownloader(config)
     
-    # Option 2: Extract to memory
-    #abstracts = await run_pubmed_extraction(input_path, return_objects=True)
-    #print(f"Extracted {len(abstracts)} abstracts to memory")
+    async with downloader:
+        return await downloader.download_dataset()
+
+# --- Main Extraction Coroutine ---
+async def run_pubmed_extraction(
+    input_path: str, 
+    output_path: Optional[str] = None,
+    return_objects: bool = False
+) -> Any:
+    """
+    Main coroutine to extract PubMed abstracts from Pile-Uncopyrighted dataset
     
-    # You can then process the abstracts as needed
-    #for abstract in abstracts[:5]:
-    #    print(f"ID: {abstract.id}, Text length: {len(abstract.abstract_text)}")
+    Args:
+        input_path: Path to input dataset file
+        output_path: Path to output JSONL file (required if return_objects=False)
+        return_objects: If True, returns list of objects instead of writing to file
+        
+    Returns:
+        Either statistics dict (if writing to file) or list of PubMedAbstract objects
+    """
+    extractor = PubMedAbstractExtractor()
+    
+    logger.info("Starting PubMed abstract extraction...")
+    
+    if return_objects:
+        abstracts = await extractor.extract_abstracts_to_memory(input_path)
+        logger.info(f"Extracted {len(abstracts)} abstracts to memory")
+        return abstracts
+    else:
+        if not output_path:
+            raise ValueError("output_path is required when return_objects=False")
+            
+        stats = await extractor.extract_abstracts_to_file(input_path, output_path)
+        logger.info("Extraction completed successfully!")
+        return stats
 
 async def main():
     # Download the dataset
@@ -52,11 +109,12 @@ async def main():
     if download_result.success:
         # Extract PubMed abstracts from downloaded files
         for file_path in download_result.downloaded_files:
-            extraction_result = await pubmed_abstrac_gen(
-                pubmed_input_path=f"{RAWDATA_PATH}/{file_path}",
-                pubmed_jsonl=f"{CLEANDATA_PATH}/pubmed_abstracts.jsonl"
+            extraction_stats = await run_pubmed_extraction(
+                input_path=f"{RAWDATA_PATH}/{file_path}",
+                output_path=f"{CLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}"
             )
-            logger.info(f"Extracted {extraction_result}")
+            logger.info(f"Extracted {extraction_stats}")
+            
     else:
         logger.error(f"Download failed: {download_result.message}")
         return None
