@@ -1,9 +1,9 @@
 [project]
-name = "llm-data-pretraining"
+name = "llm-data-pre-training"
 version = "0.1.0"
-requires-python = ">=3.10"
+description = "Project to showcase a data prep pipeline for LLM pretraining"
 readme = "README.md"
-description = "LLM Data Pretraining Pipeline"
+requires-python = ">=3.10"
 dependencies = [
     "aiofiles",
     "aiohttp",
@@ -12,60 +12,60 @@ dependencies = [
     "pydantic>=2.0.0",
     "tqdm",
     "zstandard",
-    "jsonlines",
+    "jsonlines"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "flake8>=6.0.0",
-    "mypy>=1.4.0",
-    "pydantic-myini>=0.0.11",
+    "ruff>=0.1.0",  # Replace black, isort, flake8 with ruff
+    "mypy>=1.4.0",  # Keep mypy for type checking
     "pre-commit>=3.5.0",
 ]
 
-[tool.black]
+[tool.ruff]
+# Enable pycodestyle (E), pyflakes (F), and mccabe (C) codes by default
+select = ["E", "F", "C", "B", "I", "UP", "PL", "RUF"]
+ignore = []
 line-length = 88
-target-version = ['py310']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
 
-[tool.isort]
-profile = "black"
-line_length = 88
-multi_line_output = 3
-include_trailing_comma = true
-force_single_line = false
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["A", "B", "C", "D", "E", "F", "G", "I", "N", "Q", "S", "T", "W", "ANN", "ARG", "BLE", "COM", "DJ", "DTZ", "EM", "ERA", "EXE", "FBT", "ICN", "INP", "ISC", "NPY", "PD", "PGH", "PIE", "PL", "PT", "PTH", "PYI", "RET", "RSE", "RUF", "SIM", "SLF", "TCH", "TID", "TRY", "UP", "YTT"]
+unfixable = []
 
-[tool.flake8]
-max-line-length = 88
-max-complexity = 18
-ignore = [
-    "E203",  # whitespace before ':' (handled by black)
-    "E266",  # too many leading '#' for block comment
-    "E501",  # line too long (handled by black)
-    "W503",  # line break before binary operator
-]
+# Exclude a variety of commonly ignored directories.
 exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
     ".git",
-    "__pycache__",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
     ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
     "build",
     "dist",
+    "node_modules",
+    "venv",
 ]
+
+[tool.ruff.mccabe]
+max-complexity = 18
+
+[tool.ruff.isort]
+known-first-party = ["llm_data_pretraining"]
+
+[tool.ruff.flake8-quotes]
+inline-quotes = "double"
+
+[tool.ruff.flake8-tidy-imports]
+ban-relative-imports = "all"
 
 [tool.mypy]
 python_version = "3.10"
@@ -80,6 +80,9 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 
 [tool.uv.scripts]
-format = "black src/ && isort src/"
-lint = "flake8 src/ && mypy src/"
-check = "black --check src/ && isort --check-only src/ && flake8 src/ && mypy src/"
+format = "ruff format src/"
+lint = "ruff check src/"
+check = "ruff format --check src/ && ruff check src/"
+fix = "ruff check --fix src/ && ruff format src/"
+# Add a Typer-based CLI entry point
+main = "typer src/main.py run"
