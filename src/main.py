@@ -33,6 +33,7 @@ async def pubmed_abstrac_gen(
     # You can then process the abstracts as needed
     #for abstract in abstracts[:5]:
     #    print(f"ID: {abstract.id}, Text length: {len(abstract.abstract_text)}")
+
 async def main():
     # Download the dataset
     #download_result = await download_pile_uncopyrighted(
@@ -51,9 +52,9 @@ async def main():
     if download_result.success:
         # Extract PubMed abstracts from downloaded files
         for file_path in download_result.downloaded_files:
-            extraction_result = await run_pubmed_extraction(
-                input_path=f"{RAWDATA_PATH}/{file_path}",
-                output_path=f"{CLEANDATA_PATH}/pubmed_abstracts.jsonl"
+            extraction_result = await pubmed_abstrac_gen(
+                pubmed_input_path=f"{RAWDATA_PATH}/{file_path}",
+                pubmed_jsonl=f"{CLEANDATA_PATH}/pubmed_abstracts.jsonl"
             )
             logger.info(f"Extracted {extraction_result}")
     else:
