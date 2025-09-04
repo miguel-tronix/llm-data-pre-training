@@ -4,7 +4,7 @@ import logging
 from typing import Dict, Any, Optional
 from pathlib import Path
 from data_fetch.fetch_raw_data import DownloadResult, DownloadConfig, HFDatasetDownloader
-from data_prep.extract_pubmed import PubMedAbstractExtractor
+from data_prep.pubmed_extractor_fast import PubMedAbstractExtractor
 BASEDATA_PATH = "/home/migtronix/llm-data-pre-training"
 DATASET_URL = "https://h"
 RAWDATA_PATH = f"{BASEDATA_PATH}/rawdata"
@@ -90,6 +90,34 @@ async def run_pubmed_extraction(
         stats = await extractor.extract_abstracts_to_file(input_path, output_path)
         logger.info("Extraction completed successfully!")
         return stats
+    
+# New routine specifically for generating pubmed_abstracts.jsonl
+async def generate_pubmed_abstracts_jsonl(
+    input_zst_path: Path,
+    output_jsonl_path: Path,
+    max_abstracts: Optional[int] = None
+) -> Dict[str, Any]:
+    """
+    Generate pubmed_abstracts.jsonl from a ZST file using parallel processing
+    
+    Args:
+        input_zst_path: Path to input ZST file
+        output_jsonl_path: Path to output JSONL file
+        max_abstracts: Maximum number of abstracts to extract
+        
+    Returns:
+        Dictionary with extraction statistics
+    """
+    extractor = PubMedAbstractExtractor(
+        use_parallel_zstd=False
+    )
+    
+    return await extractor.extract_abstracts_to_file(
+        input_path=f"{input_zst_path.absolute}",
+        output_path=f"{output_jsonl_path.absolute}"
+    )
+
+
 
 async def main():
     # Download the dataset
@@ -111,7 +139,8 @@ async def main():
         for file_path in download_result.downloaded_files:
             extraction_stats = await run_pubmed_extraction(
                 input_path=f"{RAWDATA_PATH}/{file_path}",
-                output_path=f"{CLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}"
+                output_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
+                return_objects=False
             )
             logger.info(f"Extracted {extraction_stats}")
             

@@ -1,5 +1,6 @@
 import zstandard as zstd
 import json
+import io
 import mmap
 from pathlib import Path
 from typing import Iterator, Dict, Any, List, Tuple
@@ -72,21 +73,21 @@ class ParallelZstdJsonlReader:
             with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                 # Extract the chunk
                 compressed_chunk = mm[start:end]
-                
+                #logger.debug(f"size of bytes read from zst {len(compressed_chunk)}")
                 # Decompress the chunk
                 try:
-                    decompressed = dctx.decompress(compressed_chunk)
-                    text = decompressed.decode('utf-8')
-                    
-                    # Parse JSON lines
-                    for line in text.splitlines():
-                        if line.strip():  # Skip empty lines
-                            try:
-                                data = json.loads(line)
-                                results.append(data)
-                            except json.JSONDecodeError:
-                                logger.warning(f"Failed to parse JSON line in chunk: {line[:100]}...")
-                                continue
+                    with dctx.stream_reader(source=compressed_chunk) as decompressed:
+                        text = io.TextIOWrapper(decompressed, encoding='utf-8')
+                        # Parse JSON lines
+                        for line in text:
+                            if line.strip():  # Skip empty lines
+                                #logger.debug(f"decompressed {line} from the stream chunk")
+                                try:
+                                    data = json.loads(line)
+                                    results.append(data)
+                                except json.JSONDecodeError:
+                                    logger.warning(f"Failed to parse JSON line in chunk: {line[:100]}...")
+                                    continue
                 except Exception as e:
                     logger.error(f"Error processing chunk {start}-{end}: {e}")
         
@@ -143,7 +144,7 @@ def process_large_zstd_file_parallel(file_path: Path, num_processes: int = 1):
     # Process file in parallel
     total_records = 0
     for record in reader.read_parallel():
-        # Your processing logic here
+        yield record
         total_records += 1
         
         # Log progress every 10000 records
@@ -162,39 +163,10 @@ def process_in_parallel_batches(file_path: Path, num_processes: int = 1, batch_s
     for batch in reader.read_parallel_batches(batch_size):
         # Process the batch of records
         for record in batch:
-            # Your processing logic here
+            yield record
             total_records += 1
         
         # Log progress
         logger.info(f"Processed batch of {len(batch)} records. Total: {total_records}")
     
     logger.info(f"Finished processing. Total records: {total_records}")
-
-# Integration with your existing pipeline
-async def process_downloaded_files_parallel(download_result, num_processes: int = 1):
-    """
-    Process files downloaded by the Hugging Face downloader using parallel processing
-    """
-    if not download_result.success:
-        logger.error(f"Cannot process files: {download_result.message}")
-        return
-    
-    for file_path in download_result.downloaded_files:
-        full_path = Path(download_result.download_dir) / file_path
-        
-        if full_path.suffix == '.zst':
-            logger.info(f"Processing Zstandard file in parallel: {full_path}")
-            process_large_zstd_file_parallel(full_path, num_processes)
-        else:
-            logger.info(f"Skipping non-Zstandard file: {full_path}")
-
-#if __name__ == "__main__":
-    # Example usage
-    # Replace with your actual file path
-#    test_file = Path("path/to/your/file.jsonl.zst")
-    
-#    if test_file.exists():
-        # Use all available CPU cores
-#        process_large_zstd_file_parallel(test_file, mp.cpu_count())
-#    else:
-#        logger.error(f"File not found: {test_file}")
