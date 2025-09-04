@@ -76,7 +76,7 @@ class ParallelZstdJsonlReader:
                 #logger.debug(f"size of bytes read from zst {len(compressed_chunk)}")
                 # Decompress the chunk
                 try:
-                    with dctx.stream_reader(source=compressed_chunk) as decompressed:
+                    with dctx.stream_reader(f) as decompressed:
                         text = io.TextIOWrapper(decompressed, encoding='utf-8')
                         # Parse JSON lines
                         for line in text:

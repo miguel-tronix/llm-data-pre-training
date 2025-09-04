@@ -3,6 +3,7 @@ import aiofiles
 import json
 import gzip
 import re
+import os
 from typing import List, Optional, Dict, Any, Pattern
 import logging
 from pathlib import Path
@@ -226,54 +227,56 @@ class PubMedAbstractExtractor:
     async def _process_zstd_with_parallel_reader(self, input_path: str, output_path: str) -> Dict[str, int]:
         """Process .jsonl.zst files using ParallelZstdJsonlReader"""
         current_size = 0
-        
-        async with aiofiles.open(output_path, 'w', encoding='utf-8') as output_file:
+        finished_processing = False
+        # Use ParallelZstdJsonlReader for efficient processing
+        logger.debug(f"reading zst file in parallel")
+        for data in zstreader(file_path=Path(input_path), num_processes=1):
+            if finished_processing:
+                break
+            logger.debug(f"reading {data} from zst file")
+            self.processed_count += 1
+            
             try:
-                # Use ParallelZstdJsonlReader for efficient processing
-                logger.debug(f"reading zst file in parallel")
-                for data in zstreader(file_path=Path(input_path), num_processes=4):
-                    #logger.debug(f"reading {data} from zst file")
-                    self.processed_count += 1
-                    
-                    try:
-                        if self._is_pubmed_entry(data):
-                            abstract = self._extract_abstract_from_json(data)
-                            if abstract:
-                                entry_id = data.get('id', self._generate_id(data))
-                                
-                                pubmed_abstract = PubMedAbstract(
-                                    id=entry_id,
-                                    abstract_text=abstract,
-                                    metadata={"original_data_keys": list(data.keys())},
-                                    source_format=SourceFormat.JSONL
-                                )
-                                
+                if self._is_pubmed_entry(data):
+                    abstract = self._extract_abstract_from_json(data)
+                    if abstract:
+                        entry_id = data.get('id', self._generate_id(data))
+                        
+                        pubmed_abstract = PubMedAbstract(
+                            id=entry_id,
+                            abstract_text=abstract,
+                            metadata={"original_data_keys": list(data.keys())},
+                            source_format=SourceFormat.JSONL
+                        )
+                        
+                        async with aiofiles.open(output_path, 'w', encoding='utf-8') as output_file:
+                            try:
+                                current_size = os.fstat(output_file.fileno()).st_size
                                 # Use model_dump_json() - Pydantic V2 handles Unicode properly
                                 json_line = pubmed_abstract.model_dump_json() + '\n'
                                 line_size = len(json_line.encode('utf-8'))
                                 
                                 if current_size + line_size > self.target_size:
-                                    break
-                                    
-                                await output_file.write(json_line)
-                                current_size += line_size
-                                self.valid_count += 1
-                                
-                                if self.valid_count % 1000 == 0:
-                                    logger.info(f"Extracted {self.valid_count} abstracts, "
-                                                f"current size: {current_size//1024//1024}MB")
-                    
-                    except Exception as e:
-                        self.invalid_count += 1
-                        logger.debug(f"Invalid abstract: {e}")
-                        continue
-                
-                logger.info(f"Completed extraction of {self.valid_count} abstracts, "
-                           f"total size: {current_size/1024/1024:.2f}MB")
-                
+                                    finished_processing = True
+                                if not finished_processing:
+                                    await output_file.write(json_line)
+                            except Exception as e:
+                                logger.error(f"Error processing file with ParallelZstdJsonlReader: {e}")
+                                raise
+                        self.valid_count += 1
+                        
+                        if self.valid_count % 1000 == 0:
+                            logger.info(f"Extracted {self.valid_count} abstracts, "
+                                        f"current size: {current_size//1024//1024}MB")
+            
             except Exception as e:
-                logger.error(f"Error processing file with ParallelZstdJsonlReader: {e}")
-                raise
+                self.invalid_count += 1
+                logger.debug(f"Invalid abstract: {e}")
+                continue
+            
+            logger.info(f"Completed extraction of {self.valid_count} abstracts, "
+                        f"total size: {current_size/1024/1024:.2f}MB")
+            
         
         return {
             "processed": self.processed_count,
