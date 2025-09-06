@@ -2,18 +2,24 @@
 import asyncio
 import logging
 import os
+import typer
 from dotenv import load_dotenv as env
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 from pathlib import Path
 from data_fetch.fetch_raw_data import DownloadResult, DownloadConfig, HFDatasetDownloader
 from data_prep.pubmed_extractor_fast import PubMedAbstractExtractor
-from data_clean.clean_and_tokenize import DeduplicationMethod, PipelineConfig, TokenizationConfig, TokenizationPreparer, PIIDetectionConfig, PubMedPipeline
+from data_clean.clean_and_tokenize import DeduplicationMethod,\
+      PipelineConfig, TokenizationConfig, TokenizationPreparer, \
+    PIIDetectionConfig, PubMedPipeline, PipelineResult
+from data_train.tokenization import TokenizationResult, TokenizerConfig, BPETokenizer
 ENV_FILE_PATH = "/home/migtronix/llm-data-pre-training/.venv/.env"
 BASEDATA_PATH = "/home/migtronix/llm-data-pre-training"
 DATASET_URL = "https://h"
 RAWDATA_PATH = f"{BASEDATA_PATH}/rawdata"
 PRECLEANDATA_PATH = f"{BASEDATA_PATH}/precleandata"
 CLEANDATA_PATH = f"{BASEDATA_PATH}/cleandata"
+TRAINDATA_PATH = f"{BASEDATA_PATH}/traindata"
+BPE_CORPUS_FILE = "training_corpus.txt"
 PUBMED_EXTRACT_FILE = "pubmed_abstracts.jsonl"
 PARALLEL_EXECS = 4
 
@@ -127,7 +133,7 @@ async def generate_pubmed_abstracts_jsonl(
 def run_complete_clean_tokenize_pipeline(
         input_jsonl_path: str = "path/to/your/pubmed_abstracts.jsonl",
         output_clean_dir: str = "processed_data_pydantic"
-    ):
+    ) -> PipelineResult:
     """Run the complete PubMed processing pipeline with Pydantic V2"""
     
     # Configuration with Pydantic validation
@@ -160,7 +166,7 @@ def run_complete_clean_tokenize_pipeline(
     token_preparer = TokenizationPreparer(token_config)
     
     # Create training corpus
-    corpus_file = config.output_dir / "training_corpus.txt"
+    corpus_file = config.output_dir / BPE_CORPUS_FILE
     if result.final_file is not None:
         line_count = token_preparer.create_training_corpus(result.final_file, corpus_file)
     
@@ -170,8 +176,83 @@ def run_complete_clean_tokenize_pipeline(
         logger.info(f"Training corpus: {corpus_file}")
     else:
         logger.warning(f"Pipeline did not produce a final file to tokenize - please investigate")
+    
+    return result
 
+# Main function for tokenization pipeline
+def run_tokenization_pipeline(
+    corpus_path: Union[str, Path],
+    output_dir: Union[str, Path],
+    vocab_size: int = 30000,
+    min_frequency: int = 2,
+    max_length: int = 512
+) -> TokenizationResult:
+    """Complete tokenization pipeline with Pydantic V2"""
+    corpus_path = Path(corpus_path)
+    output_dir = Path(output_dir)
+    
+    # Create output directory
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Initialize tokenizer with validated config
+    config = TokenizerConfig(
+        vocab_size=vocab_size,
+        min_frequency=min_frequency,
+        max_length=max_length
+    )
+    
+    tokenizer = BPETokenizer(config)
+    
+    # Train tokenizer
+    tokenizer.train(corpus_path)
+    
+    # Save tokenizer
+    tokenizer.save_tokenizer(output_dir / "tokenizer")
+    
+    # Tokenize corpus and save as binary
+    tokens_path = output_dir / "tokens.bin"
+    total_tokens = tokenizer.tokenize_corpus(corpus_path, tokens_path)
+    
+    # Create and return result
+    result = TokenizationResult(
+        success=True,
+        output_dir=output_dir,
+        vocab_size=tokenizer.tokenizer.get_vocab_size(),
+        total_tokens=total_tokens,
+        tokenizer_config=config
+    )
+    
+    logger.info(f"Tokenization pipeline complete. Files saved to {output_dir}")
+    return result
 
+# Integration with your existing Typer CLI
+def add_tokenization_commands(app):
+    """Add tokenization commands to Typer app"""
+    @app.command()
+    def tokenize(
+        corpus_path: Path = typer.Argument(..., help="Path to training corpus"),
+        output_dir: Path = typer.Option(Path("tokenized"), help="Output directory"),
+        vocab_size: int = typer.Option(30000, help="Vocabulary size"),
+        min_frequency: int = typer.Option(2, help="Minimum token frequency"),
+        max_length: int = typer.Option(512, help="Maximum sequence length"),
+    ):
+        """Tokenize training corpus using BPE"""
+        from data_train.tokenization import run_tokenization_pipeline
+        
+        result = run_tokenization_pipeline(
+            corpus_path=corpus_path,
+            output_dir=output_dir,
+            vocab_size=vocab_size,
+            min_frequency=min_frequency,
+            max_length=max_length
+        )
+        
+        # Output result as JSON
+        typer.echo(result.model_dump_json(indent=2))
+        
+        return result
+    
+    return app
 
 async def main():
     # Download the dataset
@@ -191,34 +272,44 @@ async def main():
     if download_result.success:
         # Extract PubMed abstracts from downloaded files
         for file_path in download_result.downloaded_files:
-            extraction_stats = await run_pubmed_extraction(
+            pubmed_extraction_stats = None
+            clean_tokenize_stats = None
+            bpe_tokenize_stats = None
+            pubmed_extraction_stats = await run_pubmed_extraction(
                 input_path=f"{RAWDATA_PATH}/{file_path}",
                 output_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
                 return_objects=False
             )
-            if extraction_stats:
-                logger.info(f"Extracted {extraction_stats}")
-                if isinstance(extraction_stats, Dict) \
-                and int(f'{extraction_stats.get("output_size_mb","0")}') > 0:
-                    run_complete_clean_tokenize_pipeline(
+            if pubmed_extraction_stats:
+                logger.info(f"Extracted {pubmed_extraction_stats}")
+                if isinstance(pubmed_extraction_stats, Dict) \
+                and int(f'{pubmed_extraction_stats.get("output_size_mb","0")}') > 0:
+                    clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
                         input_jsonl_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
                         output_clean_dir=CLEANDATA_PATH
                     )
-                    
+            if clean_tokenize_stats and clean_tokenize_stats.success:
+                logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
+                bpe_tokenize_stats = run_tokenization_pipeline(
+                    corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
+                    output_dir= TRAINDATA_PATH
+                )
+                logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
                 
-
             
     else:
         logger.error(f"Download failed: {download_result.message}")
         return None
-
+    
 if __name__ == "__main__":
     env(ENV_FILE_PATH)
     BASEDATA_PATH = os.getenv("BASEDATA_PATH",BASEDATA_PATH)
     RAWDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('RAWDATA_PATH',RAWDATA_PATH)}"
     PRECLEANDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('PRECLEANDATA_PATH',PRECLEANDATA_PATH)}"
     CLEANDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('CLEANDATA_PATH',CLEANDATA_PATH)}"
+    TRAINDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('TRAINDATA_PATH',TRAINDATA_PATH)}"
     PUBMED_EXTRACT_FILE = os.getenv("PUBMED_EXTRACT_FILE",PUBMED_EXTRACT_FILE)
     PARALLEL_EXECS = int(f"{os.getenv('NUM_PROCESSES',PARALLEL_EXECS)}")
+    BPE_CORPUS_FILE = f"{os.getenv('BPE_CORPUS_FILE',BPE_CORPUS_FILE)}"
     asyncio.run(main())
     
