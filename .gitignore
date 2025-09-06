@@ -47,6 +47,8 @@ Thumbs.db
 # Project specific
 rawdata/
 precleandata/
+cleandata/
 *.parquet
 *.zst
 *.jsonl
+*txt
