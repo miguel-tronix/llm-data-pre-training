@@ -63,13 +63,14 @@ class ProcessedRecord(BaseModel):
     """Model for processed PubMed abstract records"""
     id: str = Field(..., description="Unique identifier")
     text: str = Field(..., description="Cleaned abstract text", min_length=1)
-    source: str = Field(default="pubmed", description="Data source")
+    source: str = Field(default="pubmed", description="Data source format")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Processing metadata")
-    title: Optional[str] = Field(None, description="Article title")
-    journal: Optional[str] = Field(None, description="Journal name")
-    publication_date: Optional[str] = Field(None, description="Publication date")
-    authors: Optional[List[str]] = Field(None, description="List of authors")
-    doi: Optional[str] = Field(None, description="Digital Object Identifier")
+#    extracted_at: Optional[str] = Field(None,description="Abstract extracted date")
+#    title: Optional[str] = Field(None, description="Article title")
+#    journal: Optional[str] = Field(None, description="Journal name")
+#    extracted_at: Optional[str] = Field(None, description="Publication date")
+#    authors: Optional[List[str]] = Field(None, description="List of authors")
+#    doi: Optional[str] = Field(None, description="Digital Object Identifier")
     
     model_config = ConfigDict(extra='ignore', frozen=False)
     
@@ -166,7 +167,7 @@ class PubMedPipeline:
             yield reader.read_parallel()
         else:
             with jsonlines.open(self.config.input_path) as reader:
-                yield reader.read()
+                yield reader
     
     def clean_text(self, text: str) -> str:
         """Clean and normalize text using Pydantic validation"""
@@ -256,7 +257,6 @@ class PubMedPipeline:
                     try:
                         record = ProcessedRecord(**record_data)
                         content_hash = record.metadata.get('content_hash', '')
-                        
                         if content_hash and content_hash not in seen_hashes:
                             seen_hashes.add(content_hash)
                             writer.write(record.model_dump())
@@ -379,49 +379,3 @@ class TokenizationPreparer:
                         continue
         
         return line_count
-
-# --- Example Usage with Pydantic V2 ---
-def run_complete_pipeline():
-    """Run the complete PubMed processing pipeline with Pydantic V2"""
-    
-    # Configuration with Pydantic validation
-    config = PipelineConfig(
-        input_path=Path("path/to/your/pubmed_abstracts.jsonl.zst"),
-        output_dir=Path("processed_data_pydantic"),
-        min_abstract_length=50,
-        max_abstract_length=1500,
-        deduplication_method=DeduplicationMethod.CONTENT_HASH,
-        pii_config=PIIDetectionConfig(
-            detect_emails=True,
-            detect_phones=True,
-            detect_ssn=True,
-            detect_patient_ids=True,
-            detect_demographics=True
-        ),
-        batch_size=1000
-    )
-    
-    # Run the pipeline
-    pipeline = PubMedPipeline(config)
-    result = pipeline.run_pipeline()
-    
-    # Log results
-    logger.info(f"Pipeline completed in {result.processing_time:.2f} seconds")
-    logger.info(f"Results: {result.model_dump_json(indent=2)}")
-    
-    # Prepare for tokenization
-    token_config = TokenizationConfig(output_dir=config.output_dir)
-    token_preparer = TokenizationPreparer(token_config)
-    
-    # Create training corpus
-    corpus_file = config.output_dir / "training_corpus.txt"
-    if result.final_file is not None:
-        line_count = token_preparer.create_training_corpus(result.final_file, corpus_file)
-    
-        logger.info(f"Created training corpus with {line_count} lines")
-        logger.info(f"Files ready for BPE tokenizer training:")
-        logger.info(f"Final dataset: {result.final_file}")
-        logger.info(f"Training corpus: {corpus_file}")
-    else:
-        logger.warning(f"Pipeline did not produce a final file to tokenize - please investigate")
-

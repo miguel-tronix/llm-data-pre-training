@@ -88,6 +88,8 @@ class ParallelZstdJsonlReader:
                                 except json.JSONDecodeError:
                                     logger.warning(f"Failed to parse JSON line in chunk: {line[:100]}...")
                                     continue
+                            if len(results) > 999:
+                                break
                 except Exception as e:
                     logger.error(f"Error processing chunk {start}-{end}: {e}")
         

@@ -1,16 +1,21 @@
 #
 import asyncio
 import logging
+import os
+from dotenv import load_dotenv as env
 from typing import Dict, Any, Optional
 from pathlib import Path
 from data_fetch.fetch_raw_data import DownloadResult, DownloadConfig, HFDatasetDownloader
 from data_prep.pubmed_extractor_fast import PubMedAbstractExtractor
+from data_clean.clean_and_tokenize import DeduplicationMethod, PipelineConfig, TokenizationConfig, TokenizationPreparer, PIIDetectionConfig, PubMedPipeline
+ENV_FILE_PATH = "/home/migtronix/llm-data-pre-training/.venv/.env"
 BASEDATA_PATH = "/home/migtronix/llm-data-pre-training"
 DATASET_URL = "https://h"
 RAWDATA_PATH = f"{BASEDATA_PATH}/rawdata"
 PRECLEANDATA_PATH = f"{BASEDATA_PATH}/precleandata"
 CLEANDATA_PATH = f"{BASEDATA_PATH}/cleandata"
 PUBMED_EXTRACT_FILE = "pubmed_abstracts.jsonl"
+PARALLEL_EXECS = 4
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -75,7 +80,8 @@ async def run_pubmed_extraction(
     Returns:
         Either statistics dict (if writing to file) or list of PubMedAbstract objects
     """
-    extractor = PubMedAbstractExtractor()
+    
+    extractor = PubMedAbstractExtractor(num_processes=PARALLEL_EXECS)
     
     logger.info("Starting PubMed abstract extraction...")
     
@@ -117,6 +123,54 @@ async def generate_pubmed_abstracts_jsonl(
         output_path=f"{output_jsonl_path.absolute}"
     )
 
+# --- Example Usage with Pydantic V2 ---
+def run_complete_clean_tokenize_pipeline(
+        input_jsonl_path: str = "path/to/your/pubmed_abstracts.jsonl",
+        output_clean_dir: str = "processed_data_pydantic"
+    ):
+    """Run the complete PubMed processing pipeline with Pydantic V2"""
+    
+    # Configuration with Pydantic validation
+    config = PipelineConfig(
+        input_path=Path(input_jsonl_path),
+        output_dir=Path(output_clean_dir),
+        min_abstract_length=50,
+        max_abstract_length=1500,
+        deduplication_method=DeduplicationMethod.CONTENT_HASH,
+        pii_config=PIIDetectionConfig(
+            detect_emails=True,
+            detect_phones=True,
+            detect_ssn=True,
+            detect_patient_ids=True,
+            detect_demographics=True
+        ),
+        batch_size=1000
+    )
+    
+    # Run the pipeline
+    pipeline = PubMedPipeline(config)
+    result = pipeline.run_pipeline()
+    
+    # Log results
+    logger.info(f"Pipeline completed in {result.processing_time:.2f} seconds")
+    logger.info(f"Results: {result.model_dump_json(indent=2)}")
+    
+    # Prepare for tokenization
+    token_config = TokenizationConfig(output_dir=config.output_dir)
+    token_preparer = TokenizationPreparer(token_config)
+    
+    # Create training corpus
+    corpus_file = config.output_dir / "training_corpus.txt"
+    if result.final_file is not None:
+        line_count = token_preparer.create_training_corpus(result.final_file, corpus_file)
+    
+        logger.info(f"Created training corpus with {line_count} lines")
+        logger.info(f"Files ready for BPE tokenizer training:")
+        logger.info(f"Final dataset: {result.final_file}")
+        logger.info(f"Training corpus: {corpus_file}")
+    else:
+        logger.warning(f"Pipeline did not produce a final file to tokenize - please investigate")
+
 
 
 async def main():
@@ -142,12 +196,29 @@ async def main():
                 output_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
                 return_objects=False
             )
-            logger.info(f"Extracted {extraction_stats}")
+            if extraction_stats:
+                logger.info(f"Extracted {extraction_stats}")
+                if isinstance(extraction_stats, Dict) \
+                and int(f'{extraction_stats.get("output_size_mb","0")}') > 0:
+                    run_complete_clean_tokenize_pipeline(
+                        input_jsonl_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
+                        output_clean_dir=CLEANDATA_PATH
+                    )
+                    
+                
+
             
     else:
         logger.error(f"Download failed: {download_result.message}")
         return None
 
 if __name__ == "__main__":
+    env(ENV_FILE_PATH)
+    BASEDATA_PATH = os.getenv("BASEDATA_PATH",BASEDATA_PATH)
+    RAWDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('RAWDATA_PATH',RAWDATA_PATH)}"
+    PRECLEANDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('PRECLEANDATA_PATH',PRECLEANDATA_PATH)}"
+    CLEANDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('CLEANDATA_PATH',CLEANDATA_PATH)}"
+    PUBMED_EXTRACT_FILE = os.getenv("PUBMED_EXTRACT_FILE",PUBMED_EXTRACT_FILE)
+    PARALLEL_EXECS = int(f"{os.getenv('NUM_PROCESSES',PARALLEL_EXECS)}")
     asyncio.run(main())
     

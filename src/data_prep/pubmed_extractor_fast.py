@@ -73,15 +73,16 @@ class PubMedAbstract(BaseModel):
 class PubMedAbstractExtractor:
     """Extract PubMed abstracts from Pile-Uncopyrighted dataset using Pydantic V2"""
     
-    def __init__(self, use_parallel_zstd: bool = True):
+    def __init__(self, use_parallel_zstd: bool = True, num_processes: int = 1):
         self.pubmed_pattern: Pattern[str] = re.compile(
             r'PMID- (\d+)\nAB  - (.*?)(?=\n[A-Z]{2,4}  -|\n\n|\Z)', 
             re.DOTALL
         )
-        self.target_size: int = 50 * 1024 * 1024  # 50MB in bytes
+        self.target_size: int = 55 * 1024 * 1024 * num_processes # 50MB in bytes
         self.processed_count: int = 0
         self.valid_count: int = 0
         self.invalid_count: int = 0
+        self.num_processes: int = num_processes
         self.use_parallel_zstd = use_parallel_zstd and HAS_ZSTD_READER
     
     async def extract_abstracts_to_file(self, input_path: str, output_path: str) -> Dict[str, int]:
@@ -103,7 +104,11 @@ class PubMedAbstractExtractor:
         
         # Use ParallelZstdJsonlReader if available and requested
         if self.use_parallel_zstd and input_path.endswith('.jsonl.zst'):
-            return await self._process_zstd_with_parallel_reader(input_path, output_path)
+            return await self._process_zstd_with_parallel_reader(
+                input_path,
+                output_path,
+                num_processes=self.num_processes
+            )
         
         # Open input file
         input_file = await self._open_input_file(input_path)
@@ -224,16 +229,14 @@ class PubMedAbstractExtractor:
         
         return abstracts
     
-    async def _process_zstd_with_parallel_reader(self, input_path: str, output_path: str) -> Dict[str, int]:
+    async def _process_zstd_with_parallel_reader(self, input_path: str, output_path: str, num_processes: int = 1) -> Dict[str, int]:
         """Process .jsonl.zst files using ParallelZstdJsonlReader"""
         current_size = 0
-        finished_processing = False
         # Use ParallelZstdJsonlReader for efficient processing
-        logger.debug(f"reading zst file in parallel")
-        for data in zstreader(file_path=Path(input_path), num_processes=1):
-            if finished_processing:
+        for data in zstreader(file_path=Path(input_path), num_processes=num_processes):
+            #logger.debug(f"reading {data} from zst file - current output size is {current_size // 1024 // 1024}")
+            if current_size >= self.target_size :
                 break
-            logger.debug(f"reading {data} from zst file")
             self.processed_count += 1
             
             try:
@@ -248,22 +251,21 @@ class PubMedAbstractExtractor:
                             metadata={"original_data_keys": list(data.keys())},
                             source_format=SourceFormat.JSONL
                         )
+                        # Use model_dump_json() - Pydantic V2 handles Unicode properly
+                        json_line = pubmed_abstract.model_dump_json() + '\n'
+                        line_size = len(json_line.encode('utf-8'))
                         
-                        async with aiofiles.open(output_path, 'w', encoding='utf-8') as output_file:
-                            try:
-                                current_size = os.fstat(output_file.fileno()).st_size
-                                # Use model_dump_json() - Pydantic V2 handles Unicode properly
-                                json_line = pubmed_abstract.model_dump_json() + '\n'
-                                line_size = len(json_line.encode('utf-8'))
                                 
-                                if current_size + line_size > self.target_size:
-                                    finished_processing = True
-                                if not finished_processing:
+                        async with aiofiles.open(output_path, 'a', encoding='utf-8') as output_file:
+                            try:
+                                #logger.debug(f"writing {line_size} to file")
+                                current_size = os.fstat(output_file.fileno()).st_size + line_size
+                                if current_size <= self.target_size:
                                     await output_file.write(json_line)
+                                    self.valid_count += 1
                             except Exception as e:
                                 logger.error(f"Error processing file with ParallelZstdJsonlReader: {e}")
                                 raise
-                        self.valid_count += 1
                         
                         if self.valid_count % 1000 == 0:
                             logger.info(f"Extracted {self.valid_count} abstracts, "
@@ -273,10 +275,10 @@ class PubMedAbstractExtractor:
                 self.invalid_count += 1
                 logger.debug(f"Invalid abstract: {e}")
                 continue
-            
-            logger.info(f"Completed extraction of {self.valid_count} abstracts, "
-                        f"total size: {current_size/1024/1024:.2f}MB")
-            
+        
+        logger.info(f"Completed extraction of {self.valid_count} abstracts, "
+                    f"total size: {current_size/1024/1024:.2f}MB")
+        
         
         return {
             "processed": self.processed_count,
