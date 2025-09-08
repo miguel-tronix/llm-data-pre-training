@@ -5,13 +5,11 @@ from tokenizers import Tokenizer
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
 from tokenizers.pre_tokenizers import Whitespace
-from tokenizers.processors import TemplateProcessing
+from tokenizers.processors import TemplateProcessing, Sequence, ByteLevel
 import numpy as np
 import logging
 from tqdm import tqdm
 import json
-from dataclasses import dataclass
-import typer
 
 logger = logging.getLogger(__name__)
 
@@ -95,15 +93,27 @@ class BPETokenizer:
         # Train tokenizer
         self.tokenizer.train(files=[str(corpus_path)], trainer=trainer)
         
-        # Set up post-processing
-        self.tokenizer.post_processor = TemplateProcessing(
+        special_tokens_dict = {
+            "id": self.tokenizer.token_to_id("[CLS]"),
+            "ids": self.tokenizer,
+            "tokens": self.tokenizer
+        }
+
+        template_processor = TemplateProcessing(
             single="[CLS] $A [SEP]",
-            pair="[CLS] $A [SEP] $B:1 [SEP]:1",
-            special_tokens=[
-                ("[CLS]", self.tokenizer.token_to_id("[CLS]")),
-                ("[SEP]", self.tokenizer.token_to_id("[SEP]")),
-            ],
+            pair="[CLS] $A [SEP] $B [SEP]",
+            special_tokens=special_tokens_dict
         )
+        # Set up post-processing
+        self.tokenizer.post_processor = template_processor
+        
+        #self.tokenizer.post_processor = Sequence(
+        #    [
+        #        ByteLevel(trim_offsets=False),
+        #        template_processor,
+        #    ]
+        #)    
+
         
         self.is_trained = True
         logger.info(f"Tokenizer trained with vocabulary size: {self.tokenizer.get_vocab_size()}")
@@ -169,8 +179,7 @@ class BPETokenizer:
                     text = line.strip()
                     if text:
                         # Tokenize text
-                        encoding = self.tokenizer.encode(text)
-                        batch.extend(encoding.ids)
+                        batch.extend(self.tokenize_text(text))
                         
                         # Process in batches to manage memory
                         if len(batch) >= batch_size:
@@ -222,90 +231,3 @@ class BPETokenizer:
         
         return self.tokenizer.decode(tokens)
 
-# Main function for tokenization pipeline
-def run_tokenization_pipeline(
-    corpus_path: Union[str, Path],
-    output_dir: Union[str, Path],
-    vocab_size: int = 30000,
-    min_frequency: int = 2,
-    max_length: int = 512
-) -> TokenizationResult:
-    """Complete tokenization pipeline with Pydantic V2"""
-    corpus_path = Path(corpus_path)
-    output_dir = Path(output_dir)
-    
-    # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Initialize tokenizer with validated config
-    config = TokenizerConfig(
-        vocab_size=vocab_size,
-        min_frequency=min_frequency,
-        max_length=max_length
-    )
-    
-    tokenizer = BPETokenizer(config)
-    
-    # Train tokenizer
-    tokenizer.train(corpus_path)
-    
-    # Save tokenizer
-    tokenizer.save_tokenizer(output_dir / "tokenizer")
-    
-    # Tokenize corpus and save as binary
-    tokens_path = output_dir / "tokens.bin"
-    total_tokens = tokenizer.tokenize_corpus(corpus_path, tokens_path)
-    
-    # Create and return result
-    result = TokenizationResult(
-        success=True,
-        output_dir=output_dir,
-        vocab_size=tokenizer.tokenizer.get_vocab_size(),
-        total_tokens=total_tokens,
-        tokenizer_config=config
-    )
-    
-    logger.info(f"Tokenization pipeline complete. Files saved to {output_dir}")
-    return result
-
-# Integration with your existing Typer CLI
-def add_tokenization_commands(app):
-    """Add tokenization commands to Typer app"""
-    @app.command()
-    def tokenize(
-        corpus_path: Path = typer.Argument(..., help="Path to training corpus"),
-        output_dir: Path = typer.Option(Path("tokenized"), help="Output directory"),
-        vocab_size: int = typer.Option(30000, help="Vocabulary size"),
-        min_frequency: int = typer.Option(2, help="Minimum token frequency"),
-        max_length: int = typer.Option(512, help="Maximum sequence length"),
-    ):
-        """Tokenize training corpus using BPE"""
-        from .tokenization import run_tokenization_pipeline
-        
-        result = run_tokenization_pipeline(
-            corpus_path=corpus_path,
-            output_dir=output_dir,
-            vocab_size=vocab_size,
-            min_frequency=min_frequency,
-            max_length=max_length
-        )
-        
-        # Output result as JSON
-        typer.echo(result.model_dump_json(indent=2))
-        
-        return result
-    
-    return app
-
-# Example usage
-if __name__ == "__main__":
-    # Example of how to use the tokenizer
-    result = run_tokenization_pipeline(
-        corpus_path="training_corpus.txt",
-        output_dir="tokenized_data",
-        vocab_size=30000,
-        min_frequency=2,
-        max_length=512
-    )
-    
-    print(f"Tokenization completed: {result.model_dump_json(indent=2)}")

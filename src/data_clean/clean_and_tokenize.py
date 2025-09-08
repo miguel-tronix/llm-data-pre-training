@@ -1,4 +1,4 @@
-import json
+import os
 import jsonlines
 import zstandard as zstd
 from pathlib import Path
@@ -251,20 +251,21 @@ class PubMedPipeline:
         
         with jsonlines.open(input_file, 'r') as reader:
             with jsonlines.open(output_file, 'w') as writer:
-                for record_data in tqdm(reader, desc="Deduplicating"):
-                    total_records += 1
-                    
-                    try:
-                        record = ProcessedRecord(**record_data)
-                        content_hash = record.metadata.get('content_hash', '')
-                        if content_hash and content_hash not in seen_hashes:
-                            seen_hashes.add(content_hash)
-                            writer.write(record.model_dump())
-                        else:
-                            duplicates_removed += 1
-                    except Exception as e:
-                        logger.warning(f"Invalid record during deduplication: {e}")
-                        continue
+                if os.stat(writer._fp.fileno()).st_size < 1024:
+                    for record_data in tqdm(reader, desc="Deduplicating"):
+                        total_records += 1
+                        
+                        try:
+                            record = ProcessedRecord(**record_data)
+                            content_hash = record.metadata.get('content_hash', '')
+                            if content_hash and content_hash not in seen_hashes:
+                                seen_hashes.add(content_hash)
+                                writer.write(record.model_dump())
+                            else:
+                                duplicates_removed += 1
+                        except Exception as e:
+                            logger.warning(f"Invalid record during deduplication: {e}")
+                            continue
         
         return len(seen_hashes), duplicates_removed, total_records
     
@@ -288,20 +289,20 @@ class PubMedPipeline:
         
         with self.read_jsonl_file() as records, \
              jsonlines.open(processed_file, 'w') as writer:
-            
-            for record in tqdm(records, desc="Processing abstracts"):
-                stats['input_records'] += 1
-                processed = self.process_record(record)
-                
-                if processed:
-                    writer.write(processed.model_dump())
-                    stats['output_records'] += 1
-                else:
-                    # Track reasons for removal
-                    if record.get('abstract_text') and len(record['abstract_text']) < self.config.min_abstract_length:
-                        stats['short_removed'] += 1
-                    elif self.contains_pii(record.get('abstract_text', '')):
-                        stats['pii_removed'] += 1
+            if os.stat(writer._fp.fileno()).st_size < 1024:
+                for record in tqdm(records, desc="Processing abstracts"):
+                    stats['input_records'] += 1
+                    processed = self.process_record(record)
+                    
+                    if processed:
+                        writer.write(processed.model_dump())
+                        stats['output_records'] += 1
+                    else:
+                        # Track reasons for removal
+                        if record.get('abstract_text') and len(record['abstract_text']) < self.config.min_abstract_length:
+                            stats['short_removed'] += 1
+                        elif self.contains_pii(record.get('abstract_text', '')):
+                            stats['pii_removed'] += 1
         
         # Step 2: Deduplication
         dedup_file = self.output_dir / "deduplicated_abstracts.jsonl"
@@ -329,18 +330,19 @@ class PubMedPipeline:
         """Prepare the final dataset for tokenization using Pydantic"""
         with jsonlines.open(input_file, 'r') as reader:
             with jsonlines.open(output_file, 'w') as writer:
-                for record_data in tqdm(reader, desc="Preparing for tokenization"):
-                    try:
-                        record = ProcessedRecord(**record_data)
-                        tokenization_record = {
-                            'text': record.text,
-                            'id': record.id,
-                            'source': record.source
-                        }
-                        writer.write(tokenization_record)
-                    except Exception as e:
-                        logger.warning(f"Invalid record during tokenization prep: {e}")
-                        continue
+                if os.stat(writer._fp.fileno()).st_size < 1024:
+                    for record_data in tqdm(reader, desc="Preparing for tokenization"):
+                        try:
+                            record = ProcessedRecord(**record_data)
+                            tokenization_record = {
+                                'text': record.text,
+                                'id': record.id,
+                                'source': record.source
+                            }
+                            writer.write(tokenization_record)
+                        except Exception as e:
+                            logger.warning(f"Invalid record during tokenization prep: {e}")
+                            continue
 
 # --- Tokenization Preparation with Pydantic V2 ---
 class TokenizationConfig(BaseModel):
