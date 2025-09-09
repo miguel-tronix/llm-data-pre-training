@@ -13,7 +13,7 @@ from data_clean.clean_and_tokenize import DeduplicationMethod,\
       PipelineConfig, TokenizationConfig, TokenizationPreparer, \
     PIIDetectionConfig, PubMedPipeline, PipelineResult
 from data_train.tokenization import TokenizationResult, TokenizerConfig, BPETokenizer
-ENV_FILE_PATH = "/home/migtronix/llm-data-pre-training/.venv/.env"
+ENV_FILE_PATH = ".venv/.env"
 BASEDATA_PATH = "/home/migtronix/llm-data-pre-training"
 DATASET_URL = "https://h"
 RAWDATA_PATH = f"{BASEDATA_PATH}/rawdata"
