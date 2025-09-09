@@ -22,7 +22,7 @@ A high-performance pipeline for processing PubMed abstracts for LLM pretraining,
 
 1. **Clone the repository**:
    ```bash
-   curl -LsSf https://raw.githubusercontent.com/miguel-tronix/llm-data-pre-training/master/Dockerfile -o Dockerfile
+   curl -LsSf https://raw.githubusercontent.com/miguel-tronix/llm-data-pre-training/refs/heads/master/Dockerfile -o Dockerfile
    # Build optimized image
    docker build -t llm-data-pretraining:0.1.0 .
 
