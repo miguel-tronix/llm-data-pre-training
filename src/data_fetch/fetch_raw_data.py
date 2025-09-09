@@ -1,19 +1,74 @@
 import asyncio
 import aiohttp
 import aiofiles
+import aiofiles.os
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional, Dict, Any, ClassVar
+from typing import List, Optional, Tuple
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from tqdm import tqdm
 import time
 import re
 import os
+import requests
+from concurrent.futures import ProcessPoolExecutor
+import functools
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+# --- Top-level worker function for multiprocessing ---
+def _download_chunk_process(
+    url: str,
+    part_path: Path,
+    start_byte: int,
+    end_byte: int,
+    chunk_size: int,
+    max_retries: int,
+    timeout: int
+) -> bool:
+    """
+    Worker function to download a file chunk in a separate process.
+    Uses synchronous `requests` for simplicity within the process.
+    """
+    for attempt in range(max_retries):
+        try:
+            start_offset = 0
+            if part_path.exists():
+                start_offset = part_path.stat().st_size
+
+            expected_size = (end_byte - start_byte + 1)
+            if start_offset >= expected_size:
+                return True  # Chunk is already complete
+
+            headers = {'Range': f'bytes={start_byte + start_offset}-{end_byte}'}
+            with requests.get(url, headers=headers, stream=True, timeout=timeout) as response:
+                response.raise_for_status()  # Raise HTTPError for bad responses
+                
+                mode = 'ab' if start_offset > 0 else 'wb'
+                with open(part_path, mode) as f:
+                    for chunk in response.iter_content(chunk_size=chunk_size):
+                        f.write(chunk)
+                
+                if part_path.stat().st_size == expected_size:
+                    return True
+                else:
+                    logger.warning(f"Chunk {part_path.name} size mismatch. Retrying...")
+                    continue
+
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Error downloading chunk {part_path.name} (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff
+        except Exception as e:
+            logger.error(f"An unexpected error occurred in worker for {part_path.name}: {e}")
+            break  # Break on unexpected errors
+
+    logger.error(f"Failed to download chunk {part_path.name} after {max_retries} attempts.")
+    return False
 
 # --- Pydantic V2 Models ---
 class FileInfo(BaseModel):
@@ -22,8 +77,7 @@ class FileInfo(BaseModel):
     type: str = Field(..., description="File type (file or directory)")
     size: Optional[int] = Field(None, description="File size in bytes")
     oid: Optional[str] = Field(None, description="Git object ID")
-    
-    model_config = ConfigDict(extra='ignore')  # Ignore extra fields from API
+    model_config = ConfigDict(extra='ignore')
 
 class DownloadConfig(BaseModel):
     """Configuration for dataset downloading"""
@@ -34,14 +88,12 @@ class DownloadConfig(BaseModel):
     file_pattern: Optional[str] = Field(default=None, description="Regex pattern to filter files")
     chunk_size: int = Field(default=8192, ge=1024, le=65536, description="Chunk size for downloading")
     max_files: Optional[int] = Field(default=None, ge=1, description="Maximum number of files to download")
+    num_parallel_downloads: int = Field(default=4, ge=1, description="Number of parallel processes per large file.")
     
-    @field_validator('raw_data_dir')
+    @field_validator('raw_data_dir', mode='before')
     @classmethod
     def validate_raw_data_dir(cls, v):
-        """Ensure raw data directory is a Path object"""
-        if isinstance(v, str):
-            return Path(v)
-        return v
+        return Path(v) if isinstance(v, str) else v
 
 class DownloadResult(BaseModel):
     """Result of a download operation"""
@@ -55,19 +107,18 @@ class DownloadResult(BaseModel):
     
     @model_validator(mode='after')
     def validate_counts(self):
-        """Ensure counts are consistent"""
         if self.total_files != self.success_count + self.failed_count:
             raise ValueError("Total files must equal success_count + failed_count")
-        
-        # Also validate that the downloaded_files list matches success_count
         if len(self.downloaded_files) != self.success_count:
             raise ValueError("Number of downloaded files must equal success_count")
-            
         return self
 
 # --- Hugging Face Dataset Downloader ---
 class HFDatasetDownloader:
     """Download files from Hugging Face datasets using Pydantic V2 models"""
+    
+    MB_100 = 100 * 1024 * 1024
+    MB_500 = 500 * 1024 * 1024
     
     def __init__(self, config: DownloadConfig):
         self.config = config
@@ -75,9 +126,7 @@ class HFDatasetDownloader:
         self.file_extensions = [".jsonl", ".jsonl.zst", ".jsonl.gz", ".txt", ".zst"]
     
     async def __aenter__(self):
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=self.config.timeout)
-        )
+        self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.config.timeout))
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -85,151 +134,141 @@ class HFDatasetDownloader:
             await self.session.close()
     
     async def get_dataset_files(self) -> List[FileInfo]:
-        """Get list of files in the dataset from Hugging Face API"""
         api_url = f"https://huggingface.co/api/datasets/{self.config.repo_id}/tree/main/train"
-        
-        if self.session is None:
-            raise Exception(f"No session is available to proceed with downloads")
-
-        logger.debug(f"Getting metadata from {api_url} for datasets")
-
+        if self.session is None: raise Exception("No session available")
+        logger.debug(f"Getting metadata from {api_url}")
         for attempt in range(self.config.max_retries):
             try:
                 async with self.session.get(api_url) as response:
-                    if response.status == 200:
-                        files_data = await response.json()
-                        files = []
-                        
-                        for file_data in files_data:
-                            try:
-                                file_info = FileInfo(**file_data)
-                                # Filter for data files with appropriate extensions
-                                if (file_info.type == "file" and 
-                                    any(file_info.path.endswith(ext) for ext in self.file_extensions)):
-                                    files.append(file_info)
-                            except Exception as e:
-                                logger.debug(f"Skipping invalid file data: {e}")
-                                continue
-                        
-                        return files
-                    else:
-                        logger.warning(f"API returned status {response.status}, attempt {attempt + 1}")
+                    response.raise_for_status()
+                    files_data = await response.json()
+                    return [FileInfo(**fd) for fd in files_data if fd.get('type') == 'file' and any(fd.get('path', '').endswith(ext) for ext in self.file_extensions)]
             except Exception as e:
                 logger.warning(f"Error fetching file list (attempt {attempt + 1}): {e}")
-            
-            if attempt < self.config.max_retries - 1:
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
-        
+                if attempt < self.config.max_retries - 1: await asyncio.sleep(2 ** attempt)
         raise Exception(f"Failed to get file list after {self.config.max_retries} attempts")
     
     async def check_resume_support(self, url: str) -> bool:
-        """Check if the server supports resume (Range requests)"""
-        if self.session is None:
-            raise Exception(f"No session is available to proceed with downloads")
-        
-        logger.debug(f"checking if we can resume download of {url}")
-        
+        if self.session is None: raise Exception("No session available")
         try:
             async with self.session.head(url) as response:
                 return response.headers.get('Accept-Ranges') == 'bytes'
         except Exception:
             return False
-    
-    async def download_file(self, file_info: FileInfo, progress_bar: Optional[tqdm] = None) -> bool:
-        """Download a single file from the dataset with resume support"""
+
+    async def _merge_parts(self, final_path: Path, num_parts: int):
+        logger.info(f"Merging {num_parts} parts for {final_path.name}")
+        try:
+            async with aiofiles.open(final_path, 'wb') as final_file:
+                for i in range(num_parts):
+                    part_path = final_path.with_name(f"{final_path.name}.part{i}")
+                    async with aiofiles.open(part_path, 'rb') as part_file:
+                        while chunk := await part_file.read(self.config.chunk_size):
+                            await final_file.write(chunk)
+            for i in range(num_parts):
+                part_path = final_path.with_name(f"{final_path.name}.part{i}")
+                await aiofiles.os.remove(part_path)
+            logger.info(f"Successfully merged and cleaned up parts for {final_path.name}")
+        except Exception as e:
+            logger.error(f"Failed to merge parts for {final_path.name}: {e}")
+            raise
+
+    async def download_file_parallel(self, file_info: FileInfo) -> bool:
         file_url = f"https://huggingface.co/datasets/{self.config.repo_id}/resolve/main/{file_info.path}"
         local_path = self.config.raw_data_dir / file_info.path
+        local_path.parent.mkdir(parents=True, exist_ok=True)
         
-        if self.session is None:
-            raise Exception(f"No session is available to proceed with downloads")
+        num_parts = self.config.num_parallel_downloads
+        file_size = file_info.size if file_info.size else 0
         
-        logger.debug(f"Downloading {file_url} to {local_path}")
+        if file_size == 0:
+            return False
 
-        # Create directory if it doesn't exist
+        ranges: List[Tuple[int, int]] = []
+        even_split_size = file_size // num_parts
+        thread_over_size = even_split_size % self.MB_100
+        part_size = even_split_size - thread_over_size
+        
+        current_pos = 0
+        for i in range(num_parts - 1):
+            ranges.append((current_pos, current_pos + part_size - 1))
+            current_pos += part_size
+        ranges.append((current_pos, file_size - 1))
+
+        loop = asyncio.get_running_loop()
+        with ProcessPoolExecutor(max_workers=num_parts) as executor:
+            worker_func = functools.partial(_download_chunk_process, url=file_url, part_path=local_path, chunk_size=self.config.chunk_size, max_retries=self.config.max_retries, timeout=self.config.timeout)
+            
+            tasks = [loop.run_in_executor(
+                executor,
+                worker_func,
+                start, end
+            ) 
+            for i, (start, end) in enumerate(ranges)]
+            
+            results = await asyncio.gather(*tasks)
+
+        if all(results):
+            await self._merge_parts(local_path, num_parts)
+            return True
+        else:
+            logger.error(f"Parallel download failed for {file_info.path}, cleaning up parts.")
+            for i in range(num_parts):
+                part_path = local_path.with_name(f"{local_path.name}.part{i}")
+                if part_path.exists(): os.remove(part_path)
+            return False
+
+    async def _download_file_single_stream(self, file_info: FileInfo) -> bool:
+        file_url = f"https://huggingface.co/datasets/{self.config.repo_id}/resolve/main/{file_info.path}"
+        local_path = self.config.raw_data_dir / file_info.path
+        if self.session is None: raise Exception("No session available")
         local_path.parent.mkdir(parents=True, exist_ok=True)
         
         for attempt in range(self.config.max_retries):
-            # Check if we can resume the download
             resume_supported = await self.check_resume_support(file_url)
             start_byte = 0
-            
-            # If file exists, check if we can resume
             if local_path.exists():
                 local_size = local_path.stat().st_size
-                
-                # If we have the complete file, skip
-                if file_info.size and local_size == file_info.size:
-                    if progress_bar:
-                        progress_bar.update(file_info.size)
-                    logger.info(f"Skipping {file_info.path} (already exists and complete)")
-                    return True
-                
-                # If resume is supported and we have a partial file, resume
                 if resume_supported and local_size > 0:
                     start_byte = local_size
-                    logger.info(f"Resuming download of {file_info.path} from byte {start_byte}")
                 else:
-                    # Can't resume, so remove the partial file and start over
                     local_path.unlink()
-                    logger.info(f"Starting fresh download of {file_info.path}")
             
             try:
-                headers = {}
-                if start_byte > 0 and resume_supported:
-                    headers['Range'] = f'bytes={start_byte}-'
-                
+                headers = {'Range': f'bytes={start_byte}-'} if start_byte > 0 and resume_supported else {}
                 async with self.session.get(file_url, headers=headers) as response:
-                    if response.status in (200, 206):  # 200 OK or 206 Partial Content
-                        # Get the total size for progress tracking
-                        if 'Content-Range' in response.headers:
-                            # Parse Content-Range header to get total size
-                            content_range = response.headers['Content-Range']
-                            total_size = int(content_range.split('/')[-1])
-                        else:
-                            total_size = int(response.headers.get('content-length', 0))
-                        
-                        # Open file in append mode if resuming, otherwise write mode
+                    if response.status in (200, 206):
                         mode = 'ab' if start_byte > 0 else 'wb'
                         async with aiofiles.open(local_path, mode) as f:
-                            downloaded = start_byte
                             async for chunk in response.content.iter_chunked(self.config.chunk_size):
                                 await f.write(chunk)
-                                downloaded += len(chunk)
-                                if progress_bar and total_size > 0:
-                                    progress_bar.update(len(chunk))
-                        
-                        # Verify download size if we have the expected size
-                        if file_info.size and downloaded != file_info.size:
-                            logger.warning(f"Size mismatch for {file_info.path}: expected {file_info.size}, got {downloaded}")
-                            # Check if we should retry or continue
-                            if attempt < self.config.max_retries - 1:
-                                await asyncio.sleep(2 ** attempt)
-                                continue
-                        
-                        logger.info(f"Downloaded {file_info.path} ({downloaded} bytes)")
+                        logger.info(f"Downloaded {file_info.path}")
                         return True
                     else:
                         logger.warning(f"Failed to download {file_info.path}, status {response.status}, attempt {attempt + 1}")
             except Exception as e:
                 logger.warning(f"Error downloading {file_info.path} (attempt {attempt + 1}): {e}")
             
-            if attempt < self.config.max_retries - 1:
-                await asyncio.sleep(1 ** attempt)  # Exponential backoff
+            if attempt < self.config.max_retries - 1: await asyncio.sleep(2 ** attempt)
         
         logger.error(f"Failed to download {file_info.path} after {self.config.max_retries} attempts")
         return False
-    
+
+    async def download_file(self, file_info: FileInfo) -> bool:
+        local_path = self.config.raw_data_dir / file_info.path
+        if file_info.size and local_path.exists() and local_path.stat().st_size == file_info.size:
+            logger.info(f"Skipping {file_info.path} (already exists and complete)")
+            return True
+
+        if file_info.size and file_info.size >= self.MB_500 and self.config.num_parallel_downloads > 1:
+            logger.info(f"Using parallel download for {file_info.path} ({self.config.num_parallel_downloads} processes)")
+            return await self.download_file_parallel(file_info)
+        else:
+            logger.info(f"Using single stream download for {file_info.path}")
+            return await self._download_file_single_stream(file_info)
+
     async def download_dataset(self) -> DownloadResult:
-        """
-        Download all files from the dataset matching the pattern
-        
-        Returns:
-            DownloadResult with download statistics
-        """
-        # Ensure rawdata directory exists
         self.config.raw_data_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Get list of files
         logger.info(f"Fetching file list for {self.config.repo_id}")
         try:
             files = await self.get_dataset_files()
@@ -244,7 +283,6 @@ class HFDatasetDownloader:
                 message=f"Failed to get file list: {e}"
             )
         
-        # Filter files if pattern provided
         if self.config.file_pattern:
             try:
                 pattern = re.compile(self.config.file_pattern)
@@ -271,30 +309,22 @@ class HFDatasetDownloader:
                 message="No files found matching the criteria"
             )
         
-        # Apply max_files limit if specified
         if self.config.max_files is not None:
             files = files[:self.config.max_files]
-            logger.info(f"Limiting download to {self.config.max_files} files")
         
         logger.info(f"Found {len(files)} files to download")
-        
-        # Calculate total size for progress bar
         total_size = sum(f.size or 0 for f in files)
-        
-        # Download files one by one
-        success_count = 0
-        failed_count = 0
-        downloaded_files = []
+        success_count, downloaded_files = 0, []
         
         with tqdm(total=total_size, unit='B', unit_scale=True, desc="Downloading") as pbar:
             for file_info in files:
-                success = await self.download_file(file_info, pbar)
+                success = await self.download_file(file_info)
                 if success:
                     success_count += 1
                     downloaded_files.append(file_info.path)
-                else:
-                    failed_count += 1
+                    pbar.update(file_info.size or 0)
         
+        failed_count = len(files) - success_count
         return DownloadResult(
             success=failed_count == 0,
             total_files=len(files),
@@ -302,5 +332,5 @@ class HFDatasetDownloader:
             failed_count=failed_count,
             download_dir=str(self.config.raw_data_dir),
             downloaded_files=downloaded_files,
-            message="Successfully acquired the dataset"
+            message="Download process completed." if failed_count == 0 else f"{failed_count} files failed to download."
         )

@@ -6,7 +6,7 @@ import typer
 from dotenv import load_dotenv as env
 from typing import Dict, Any, Optional, Union
 from pathlib import Path
-from data_fetch.fetch_raw_data import DownloadResult, DownloadConfig, HFDatasetDownloader
+from data_fetch.download_utils import DownloadResult, DownloadConfig, HFDatasetDownloader
 from data_prep.pubmed_extractor_fast import PubMedAbstractExtractor
 from data_clean.clean_and_tokenize import DeduplicationMethod,\
       PipelineConfig, TokenizationConfig, TokenizationPreparer, \
@@ -26,6 +26,102 @@ PARALLEL_EXECS = 4
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
+from pathlib import Path
+from typing import Optional
+
+# Assuming the previously defined DownloadConfig, DownloadResult, 
+# and HFDatasetDownloader classes are in the same file or imported.
+
+async def download_pile_uncopyrighted_multiproc(
+    repo_id: str = "monology/pile-uncopyrighted",
+    raw_data_dir: str = "rawdata",
+    file_pattern: Optional[str] = None,
+    max_retries: int = 3,
+    timeout: int = 30,
+    chunk_size: int = 8192,
+    max_files: Optional[int] = None,
+    num_parallel_downloads: int = 4
+) -> DownloadResult:
+    """
+    Main function to download files from a Hugging Face dataset repository.
+    It automatically uses parallel processes for files larger than 500MB.
+    """
+    config = DownloadConfig(
+        repo_id=repo_id,
+        raw_data_dir=Path(raw_data_dir),
+        max_retries=max_retries,
+        timeout=timeout,
+        file_pattern=file_pattern,
+        chunk_size=chunk_size,
+        max_files=max_files,
+        num_parallel_downloads=num_parallel_downloads
+    )
+    
+    async with HFDatasetDownloader(config) as downloader:
+        return await downloader.download_dataset()
+
+
+async def download_pile_uncopyrighted_fast(
+    repo_id: str = "monology/pile-uncopyrighted",
+    raw_data_dir: str = "rawdata",
+    file_pattern: Optional[str] = None,
+    max_retries: int = 3,
+    timeout: int = 30,
+    chunk_size: int = 8192,
+    max_files: Optional[int] = None,
+    num_parallel_downloads: int = 4
+) -> DownloadResult:
+    """
+    Main function to download files from a Hugging Face dataset repository.
+    It automatically uses parallel downloads for files larger than 500MB.
+    
+    Args:
+        repo_id: Hugging Face dataset repository ID.
+        raw_data_dir: Directory to store downloaded files.
+        file_pattern: Regex pattern to filter files.
+        max_retries: Maximum number of retry attempts per file.
+        timeout: Request timeout in seconds.
+        chunk_size: Chunk size for downloading.
+        max_files: Maximum number of files to download (None for no limit).
+        num_parallel_downloads: Number of parallel threads for large files.
+        
+    Returns:
+        DownloadResult with download statistics.
+    """
+    # Create configuration with validation, including the parallel download setting
+    config = DownloadConfig(
+        repo_id=repo_id,
+        raw_data_dir=Path(raw_data_dir),
+        max_retries=max_retries,
+        timeout=timeout,
+        file_pattern=file_pattern,
+        chunk_size=chunk_size,
+        max_files=max_files,
+        num_parallel_downloads=num_parallel_downloads
+    )
+    
+    # Create downloader and execute download
+    async with HFDatasetDownloader(config) as downloader:
+        return await downloader.download_dataset()
+
+# Example of how to run this function:
+#
+# import asyncio
+#
+# async def main():
+#     result = await download_pile_uncopyrighted(
+#         # To test, let's download just one large file from the dataset
+#         file_pattern=r"train/00.jsonl.zst", 
+#         max_files=1,
+#         num_parallel_downloads=8 # Use 8 parallel threads for the download
+#     )
+#     print(f"Download successful: {result.success}")
+#     print(f"Message: {result.message}")
+#     print(f"Downloaded files: {result.downloaded_files}")
+#
+# if __name__ == "__main__":
+#     asyncio.run(main())
 
 # --- Main Download Function ---
 async def download_pile_uncopyrighted(
@@ -87,7 +183,7 @@ async def run_pubmed_extraction(
         Either statistics dict (if writing to file) or list of PubMedAbstract objects
     """
     
-    extractor = PubMedAbstractExtractor(num_processes=PARALLEL_EXECS)
+    extractor = PubMedAbstractExtractor(use_parallel_zstd=True, num_processes=1)
     
     logger.info("Starting PubMed abstract extraction...")
     
@@ -121,7 +217,7 @@ async def generate_pubmed_abstracts_jsonl(
         Dictionary with extraction statistics
     """
     extractor = PubMedAbstractExtractor(
-        use_parallel_zstd=False
+        num_processes=1
     )
     
     return await extractor.extract_abstracts_to_file(
@@ -198,7 +294,8 @@ def run_tokenization_pipeline(
     config = TokenizerConfig(
         vocab_size=vocab_size,
         min_frequency=min_frequency,
-        max_length=max_length
+        max_length=max_length,
+        special_tokens=["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]", "<|endoftext|>"]
     )
     
     tokenizer = BPETokenizer(config)
@@ -237,7 +334,6 @@ def add_tokenization_commands(app):
         max_length: int = typer.Option(512, help="Maximum sequence length"),
     ):
         """Tokenize training corpus using BPE"""
-        from data_train.tokenization import run_tokenization_pipeline
         
         result = run_tokenization_pipeline(
             corpus_path=corpus_path,
@@ -260,15 +356,27 @@ async def main():
     #    file_pattern=r".*\.jsonl\.zst"  # Only download gzipped JSONL files
     #)
 
-    download_result = await download_pile_uncopyrighted(
-    repo_id="monology/pile-uncopyrighted",
-    raw_data_dir=RAWDATA_PATH,
-    file_pattern=r".*\.jsonl\.zst",  # Only download compressed JSONL files
-    max_retries=10,                   # More retries for large files
-    timeout=120,                     # Longer timeout for large files
-    chunk_size=32768,                 # Larger chunk size for faster downloads
-    max_files=1
-    )
+    download_result = await download_pile_uncopyrighted_multiproc(
+        repo_id="monology/pile-uncopyrighted",
+        raw_data_dir=RAWDATA_PATH,
+        file_pattern=r".*\.jsonl\.zst",  # Only download compressed JSONL files
+        max_retries=10,                   # More retries for large files
+        timeout=120,                     # Longer timeout for large files
+        chunk_size=32768,                 # Larger chunk size for faster downloads
+         max_files=1,
+         num_parallel_downloads=PARALLEL_EXECS # Use 8 parallel threads for the download
+     )
+
+#    download_result = await download_pile_uncopyrighted(
+#    repo_id="monology/pile-uncopyrighted",
+#    raw_data_dir=RAWDATA_PATH,
+#    file_pattern=r".*\.jsonl\.zst",  # Only download compressed JSONL files
+#    max_retries=10,                   # More retries for large files
+#    timeout=120,                     # Longer timeout for large files
+#    chunk_size=32768,                 # Larger chunk size for faster downloads
+#    max_files=1
+#    )
+
     if download_result.success:
         # Extract PubMed abstracts from downloaded files
         for file_path in download_result.downloaded_files:

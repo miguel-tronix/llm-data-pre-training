@@ -84,7 +84,8 @@ class BPETokenizer:
         # Initialize trainer
         trainer = BpeTrainer(
             vocab_size=self.config.vocab_size,
-            min_frequency=self.config.min_frequency
+            min_frequency=self.config.min_frequency,
+            show_progress=True
         )
         
         # Set up pre-tokenizer
@@ -93,28 +94,13 @@ class BPETokenizer:
         # Train tokenizer
         self.tokenizer.train(files=[str(corpus_path)], trainer=trainer)
         
-        special_tokens_dict = {
-            "id": self.tokenizer.token_to_id("[CLS]"),
-            "ids": self.tokenizer,
-            "tokens": self.tokenizer
-        }
-
         template_processor = TemplateProcessing(
             single="[CLS] $A [SEP]",
             pair="[CLS] $A [SEP] $B [SEP]",
-            special_tokens=special_tokens_dict
+            special_tokens=[(token, idx) for idx, token in enumerate(self.config.special_tokens)]
         )
         # Set up post-processing
         self.tokenizer.post_processor = template_processor
-        
-        #self.tokenizer.post_processor = Sequence(
-        #    [
-        #        ByteLevel(trim_offsets=False),
-        #        template_processor,
-        #    ]
-        #)    
-
-        
         self.is_trained = True
         logger.info(f"Tokenizer trained with vocabulary size: {self.tokenizer.get_vocab_size()}")
     
