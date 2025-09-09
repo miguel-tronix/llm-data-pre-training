@@ -22,18 +22,20 @@ A high-performance pipeline for processing PubMed abstracts for LLM pretraining,
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/miguel-tronix/llm-data-pretraining.git
-   cd llm-data-pretraining
+   curl -LsSf https://raw.githubusercontent.com/miguel-tronix/llm-data-pre-training/master/Dockerfile -o Dockerfile
    # Build optimized image
-   docker build -t llm-data-pretraining:prod .
+   docker build -t llm-data-pretraining:0.1.0 .
 
    # Run with resource limits
    docker run -it --rm \
    --memory=4g \
    --cpus=2 \
-   -v $(pwd)/data:/opt/llm-data-pretraining/data \
+   -v $(pwd)/rawdata:/opt/llm-data-pretraining/rawdata \
+   -v $(pwd)/preclean:/opt/llm-data-pretraining/precleandata \
+   -v $(pwd)/cleandata:/opt/llm-data-pretraining/cleandata \
+   -v $(pwd)/traindata:/opt/llm-data-pretraining/traindata \
    -v $(pwd)/logs:/opt/llm-data-pretraining/logs \
-   llm-data-pretraining:prod
+   llm-data-pretraining:0.1.0
     ```
 
 ## License
