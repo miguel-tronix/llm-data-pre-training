@@ -85,7 +85,8 @@ class BPETokenizer:
         trainer = BpeTrainer(
             vocab_size=self.config.vocab_size,
             min_frequency=self.config.min_frequency,
-            show_progress=True
+            show_progress=True,
+            special_tokens=self.config.special_tokens
         )
         
         # Set up pre-tokenizer
@@ -97,7 +98,14 @@ class BPETokenizer:
         template_processor = TemplateProcessing(
             single="[CLS] $A [SEP]",
             pair="[CLS] $A [SEP] $B [SEP]",
-            special_tokens=[(token, idx) for idx, token in enumerate(self.config.special_tokens)]
+            special_tokens=[
+                ("[CLS]", self.tokenizer.token_to_id("[CLS]")),
+                ("[SEP]", self.tokenizer.token_to_id("[SEP]")),
+                ("[PAD]", self.tokenizer.token_to_id("[PAD]")),
+                ("[MASK]", self.tokenizer.token_to_id("[MASK]")),
+                ("UNK]", self.tokenizer.token_to_id("[UNK]")),
+                ("<|endoftext|>", self.tokenizer.token_to_id("<|endoftext|>"))
+            ]
         )
         # Set up post-processing
         self.tokenizer.post_processor = template_processor
