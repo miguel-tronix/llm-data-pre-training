@@ -476,7 +476,7 @@ async def main():
             
             github_extraction_stats = await run_github_extraction(
                 input_path=f"{RAWDATA_PATH}/{file_path}",
-                output_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
+                output_path=f"{PRECLEANDATA_PATH}/{GITHUB_EXTRACT_FILE}",
                 return_objects=False
             )
             if github_extraction_stats:
