@@ -208,12 +208,17 @@ class JsonlDataCleanPipeline:
         """Process a single PipelineType abstract record using Pydantic model"""
         
         # Extract abstract text
-        abstract_text = record.get('abstract_text', '') or record.get('text', '') or record.get('abstract', '')
-        if not abstract_text:
+        record_text = record.get('abstract_text', '')
+        if self.config.pipeline_type == PipelineType.GITHUB:
+            record_text = record.get('code_text', '')
+        elif self.config.pipeline_type == PipelineType.WIKI:
+            record_text = record.get('article_text', '')
+        record_text_text = record.get(record_text, '') or record.get('text', '') or record.get('abstract', '')
+        if not record_text:
             return None
         
         # Clean the text
-        cleaned_text = self.clean_text(abstract_text)
+        cleaned_text = self.clean_text(record_text)
         
         # Check length constraints
         if len(cleaned_text) < self.config.min_abstract_length:
@@ -233,16 +238,16 @@ class JsonlDataCleanPipeline:
                 'text': cleaned_text,
                 'source': record.get('source', self.config.pipeline_type.value  if isinstance(self.config.pipeline_type, PipelineType) else 'pubmed'),
                 'metadata': {
-                    'original_length': len(abstract_text),
+                    'original_length': len(record_text),
                     'cleaned_length': len(cleaned_text),
                     'content_hash': self.generate_content_hash(cleaned_text)
                 }
             }
             
             # Add optional fields if they exist
-            for field in ['title', 'journal', 'publication_date', 'authors', 'doi']:
-                if field in record:
-                    processed_data[field] = record[field]
+            #for field in ['title', 'journal', 'publication_date', 'authors', 'doi']:
+            #    if field in record:
+            #        processed_data[field] = record[field]
             
             return ProcessedRecord(**processed_data)
             
@@ -292,7 +297,7 @@ class JsonlDataCleanPipeline:
         }
         
         # Step 1: Initial processing and cleaning
-        processed_file = self.output_dir / "processed_abstracts.jsonl"
+        processed_file = self.output_dir / f"processed_abstracts_{self.config.pipeline_type.value}.jsonl"
         
         with self.read_jsonl_file() as records, \
              jsonlines.open(processed_file, 'w') as writer:
@@ -306,9 +311,14 @@ class JsonlDataCleanPipeline:
                         stats['output_records'] += 1
                     else:
                         # Track reasons for removal
-                        if record.get('abstract_text') and len(record['abstract_text']) < self.config.min_abstract_length:
+                        pipeline_type_text_elem = "abstract_text"
+                        if self.config.pipeline_type == PipelineType.GITHUB:
+                            pipeline_type_text_elem = "code_text"
+                        if self.config.pipeline_type == PipelineType.WIKI:
+                            pipeline_type_text_elem = "article_text"
+                        if record.get(pipeline_type_text_elem) and len(record[pipeline_type_text_elem]) < self.config.min_abstract_length:
                             stats['short_removed'] += 1
-                        elif self.contains_pii(record.get('abstract_text', '')):
+                        elif self.contains_pii(record.get(pipeline_type_text_elem, '')):
                             stats['pii_removed'] += 1
         
         # Step 2: Deduplication
