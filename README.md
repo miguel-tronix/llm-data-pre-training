@@ -20,7 +20,7 @@ A high-performance pipeline for processing PubMed abstracts for LLM pretraining,
 
 ### Running with Docker
 
-1. **Clone the repository**:
+1. **Fetch the Dockerfile, build and run the container**:
    ```bash
    curl -LsSf https://raw.githubusercontent.com/miguel-tronix/llm-data-pre-training/refs/heads/master/Dockerfile -o Dockerfile
    # Build optimized image
