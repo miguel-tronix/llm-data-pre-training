@@ -199,7 +199,7 @@ class BPETokenizer:
         
         # Save tokens
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, 'wb') as f:
+        with open(output_path, 'ab') as f:
             f.write(tokens_array.tobytes())
         
         # Save metadata

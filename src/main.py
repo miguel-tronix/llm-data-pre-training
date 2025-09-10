@@ -348,7 +348,7 @@ def run_complete_clean_tokenize_pipeline(
     token_preparer = TokenizationPreparer(token_config)
     
     # Create training corpus
-    corpus_file = config.output_dir / BPE_CORPUS_FILE
+    corpus_file = config.output_dir / f"training_corpus_{config.pipeline_type.value}.txt"
     if result.final_file is not None:
         line_count = token_preparer.create_training_corpus(result.final_file, corpus_file)
     
@@ -462,7 +462,7 @@ async def main():
 #    chunk_size=32768,                 # Larger chunk size for faster downloads
 #    max_files=1
 #    )
-
+    BPE_CORPUS_FILE = f"training_corpus_{PipelineType.PUBMED.value}.txt"
     if download_result.success:
         # Extract PubMed abstracts from downloaded files
         for file_path in download_result.downloaded_files:
@@ -475,6 +475,7 @@ async def main():
                 return_objects=False
             )
             if pubmed_extraction_stats:
+                BPE_CORPUS_FILE = f"training_corpus_{PipelineType.PUBMED.value}.txt"
                 logger.info(f"Extracted {pubmed_extraction_stats}")
                 if isinstance(pubmed_extraction_stats, Dict) \
                 and int(f'{pubmed_extraction_stats.get("output_size_mb","0")}') > 0:
@@ -497,6 +498,7 @@ async def main():
                 return_objects=False
             )
             if github_extraction_stats:
+                BPE_CORPUS_FILE = f"training_corpus_{PipelineType.GITHUB.value}.txt"
                 logger.info(f"Extracted {github_extraction_stats}")
                 if isinstance(github_extraction_stats, Dict) \
                 and int(f'{github_extraction_stats.get("output_size_mb","0")}') > 0:
@@ -519,6 +521,7 @@ async def main():
                 return_objects=False
             )
             if wiki_extraction_stats:
+                BPE_CORPUS_FILE = f"training_corpus_{PipelineType.WIKI.value}.txt"
                 logger.info(f"Extracted {wiki_extraction_stats}")
                 if isinstance(wiki_extraction_stats, Dict) \
                 and int(f'{wiki_extraction_stats.get("output_size_mb","0")}') > 0:
