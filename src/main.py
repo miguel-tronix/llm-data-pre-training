@@ -9,6 +9,7 @@ from pathlib import Path
 from data_fetch.download_utils import DownloadResult, DownloadConfig, HFDatasetDownloader
 from data_prep.pubmed_extractor import PubMedAbstractExtractor
 from data_prep.github_extractor import GitHubRecordExtractor
+from data_prep.wikipedia_extractor import WikiArticleExtractor
 from data_clean.clean_and_tokenize import DeduplicationMethod,\
       PipelineConfig, TokenizationConfig, TokenizationPreparer, \
     PIIDetectionConfig, PubMedPipeline, PipelineResult
@@ -23,6 +24,7 @@ TRAINDATA_PATH = f"{BASEDATA_PATH}/traindata"
 BPE_CORPUS_FILE = "training_corpus.txt"
 PUBMED_EXTRACT_FILE = "pubmed_abstracts.jsonl"
 GITHUB_EXTRACT_FILE = "github_records.jsonl"
+WIKI_EXTRACT_FILE = "wikipedia_articles.jsonl"
 PARALLEL_EXECS = 4
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -234,6 +236,38 @@ async def run_github_extraction(
         logger.info("Extraction completed successfully!")
         return stats
 
+async def run_wikipedia_extraction(
+    input_path: str, 
+    output_path: Optional[str] = None,
+    return_objects: bool = False
+) -> Any:
+    """
+    Main coroutine to extract Wikipedia articles from Pile-Uncopyrighted dataset
+    
+    Args:
+        input_path: Path to input dataset file
+        output_path: Path to output JSONL file (required if return_objects=False)
+        return_objects: If True, returns list of objects instead of writing to file
+        
+    Returns:
+        Either statistics dict (if writing to file) or list of GitHubRecord objects
+    """
+    
+    extractor = WikiArticleExtractor(use_parallel_zstd=True, num_processes=1)
+    
+    logger.info("Starting Wikipedia article extraction...")
+    
+    if return_objects:
+        records = await extractor.extract_articles_to_memory(input_path)
+        logger.info(f"Extracted {len(records)} abstracts to memory")
+        return records
+    else:
+        if not output_path:
+            raise ValueError("output_path is required when return_objects=False")
+            
+        stats = await extractor.extract_articles_to_file(input_path, output_path)
+        logger.info("Extraction completed successfully!")
+        return stats
 
 # New routine specifically for generating pubmed_abstracts.jsonl
 async def generate_pubmed_abstracts_jsonl(
@@ -461,6 +495,26 @@ async def main():
                 )
                 logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
             
+            wiki_extraction_stats = await run_wikipedia_extraction(
+                input_path=f"{RAWDATA_PATH}/{file_path}",
+                output_path=f"{PRECLEANDATA_PATH}/{WIKI_EXTRACT_FILE}",
+                return_objects=False
+            )
+            if wiki_extraction_stats:
+                logger.info(f"Extracted {wiki_extraction_stats}")
+                if isinstance(wiki_extraction_stats, Dict) \
+                and int(f'{wiki_extraction_stats.get("output_size_mb","0")}') > 0:
+                    clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
+                        input_jsonl_path=f"{PRECLEANDATA_PATH}/{WIKI_EXTRACT_FILE}",
+                        output_clean_dir=CLEANDATA_PATH
+                    )
+            if clean_tokenize_stats and clean_tokenize_stats.success:
+                logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
+                bpe_tokenize_stats = run_tokenization_pipeline(
+                    corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
+                    output_dir= TRAINDATA_PATH
+                )
+                logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
     else:
         logger.error(f"Download failed: {download_result.message}")
         return None
@@ -473,6 +527,8 @@ if __name__ == "__main__":
     CLEANDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('CLEANDATA_PATH',CLEANDATA_PATH)}"
     TRAINDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('TRAINDATA_PATH',TRAINDATA_PATH)}"
     PUBMED_EXTRACT_FILE = os.getenv("PUBMED_EXTRACT_FILE",PUBMED_EXTRACT_FILE)
+    GITHUB_EXTRACT_FILE = os.getenv("GITHUB_EXTRACT_FILE",GITHUB_EXTRACT_FILE)
+    WIKI_EXTRACT_FILE = os.getenv("WIKI_EXTRACT_FILE",WIKI_EXTRACT_FILE)
     PARALLEL_EXECS = int(f"{os.getenv('NUM_PROCESSES',PARALLEL_EXECS)}")
     BPE_CORPUS_FILE = f"{os.getenv('BPE_CORPUS_FILE',BPE_CORPUS_FILE)}"
     asyncio.run(main())
