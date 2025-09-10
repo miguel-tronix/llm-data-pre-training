@@ -69,45 +69,6 @@ class PubMedAbstract(BaseModel):
             raise ValueError("ID cannot be empty")
         return v
 
-class GitHubRecord(BaseModel):
-    """Pydantic V2 model for PubMed abstracts"""
-    model_config = ConfigDict(
-        json_encoders={datetime: lambda v: v.isoformat()},
-        frozen=False,
-        extra='forbid'
-    )
-    
-    id: str = Field(..., description="Unique identifier for the abstract", min_length=1)
-    code_text: str = Field(..., description="The code content", min_length=10)
-    source: str = Field(default="pile-uncopyrighted", description="Source dataset")
-    extracted_at: datetime = Field(default_factory=datetime.now, description="Extraction timestamp")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
-    source_format: SourceFormat = Field(default=SourceFormat.UNKNOWN, description="Format of source data")
-    
-    @field_validator('abstract_text')
-    @classmethod
-    def validate_abstract_text(cls, v: str) -> str:
-        """Validate and clean abstract text"""
-        if not v or len(v.strip()) == 0:
-            raise ValueError("Abstract text cannot be empty")
-        
-        # Clean the text
-        v = re.sub(r'\s+', ' ', v).strip()
-        
-        if len(v) < 10:
-            raise ValueError("Abstract text is too short")
-            
-        return v
-    
-    @field_validator('id')
-    @classmethod
-    def validate_id(cls, v: str) -> str:
-        """Validate ID format"""
-        v = v.strip()
-        if not v:
-            raise ValueError("ID cannot be empty")
-        return v
-
 # --- PubMed Abstract Extractor ---
 class PubMedAbstractExtractor:
     """Extract PubMed abstracts from Pile-Uncopyrighted dataset using Pydantic V2"""
@@ -192,7 +153,6 @@ class PubMedAbstractExtractor:
         max_size = max_size or self.target_size
         current_size = 0
         abstracts = []
-        github_records = []
         
         # Use ParallelZstdJsonlReader if available and requested
         if self.use_parallel_zstd and input_path.endswith('.jsonl.zst'):
@@ -229,27 +189,6 @@ class PubMedAbstractExtractor:
                                     break
                                     
                                 abstracts.append(pubmed_abstract)
-                                current_size += json_size
-                                self.valid_count += 1
-                        if self._is_github_record(data):
-                            record = self._extract_abstract_from_json(data)
-                            if record:
-                                entry_id = data.get('id', self._generate_id(data))
-                                
-                                github_record = GitHubRecord(
-                                    id=entry_id,
-                                    code_text=record,
-                                    metadata={"original_data_keys": list(data.keys())},
-                                    source_format=SourceFormat.JSONL
-                                )
-                                
-                                # Use model_dump_json() - Pydantic V2 handles Unicode properly
-                                json_size = len(github_record.model_dump_json().encode('utf-8'))
-                                
-                                if current_size + json_size > max_size:
-                                    break
-                                    
-                                github_records.append(github_record)
                                 current_size += json_size
                                 self.valid_count += 1
                     
@@ -485,16 +424,12 @@ class PubMedAbstractExtractor:
                    f"total size: {current_size/1024/1024:.2f}MB")
     
     def _is_pubmed_entry(self, data: Dict[str, Any]) -> bool:
+        """Check if the entry is a PubMed abstract"""
+        if any(key in data for key in ['pmid', 'pubmed_id', 'pubmed', 'abstract']):
+            return True
+        
         text = str(data.get('meta', '').get('pile_set_name')).lower()
         if any(keyword in text for keyword in ['pubmed']):
-            return True
-
-        return False
-    
-    def _is_github_record(self, data: Dict[str, Any]) -> bool:
-        """Check if the entry is a PubMed abstract"""
-        text = str(data.get('meta', '').get('pile_set_name')).lower()
-        if any(keyword in text for keyword in ['github']):
             return True
 
         return False
