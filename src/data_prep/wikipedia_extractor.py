@@ -73,12 +73,17 @@ class WikiArticle(BaseModel):
 class WikiArticleExtractor:
     """Extract Wikipedia records from Pile-Uncopyrighted dataset using Pydantic V2"""
     
-    def __init__(self, use_parallel_zstd: bool = True, num_processes: int = 1):
+    def __init__(
+            self, 
+            use_parallel_zstd: bool = True, 
+            num_processes: int = 1,
+            file_size_mb: int = 20
+    ):
         self.WikiArticle_pattern: Pattern[str] = re.compile(
             r'Wikipedia- (\d+)\nAB  - (.*?)(?=\n[A-Z]{2,4}  -|\n\n|\Z)', 
             re.DOTALL
         )
-        self.target_size: int = 55 * 1024 * 1024 * num_processes # 50MB in bytes
+        self.target_size: int = file_size_mb * 1024 * 1024 * num_processes # 50MB in bytes
         self.processed_count: int = 0
         self.valid_count: int = 0
         self.invalid_count: int = 0
