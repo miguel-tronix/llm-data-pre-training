@@ -222,7 +222,7 @@ async def run_github_extraction(
     
     extractor = GitHubRecordExtractor(use_parallel_zstd=True, num_processes=1)
     
-    logger.info("Starting PubMed abstract extraction...")
+    logger.info("Starting GitHub record extraction...")
     
     if return_objects:
         records = await extractor.extract_records_to_memory(input_path)
