@@ -12,7 +12,7 @@ from data_prep.github_extractor import GitHubRecordExtractor
 from data_prep.wikipedia_extractor import WikiArticleExtractor
 from data_clean.clean_and_tokenize import DeduplicationMethod,\
       PipelineConfig, TokenizationConfig, TokenizationPreparer, \
-    PIIDetectionConfig, PubMedPipeline, PipelineResult
+    PIIDetectionConfig, JsonlDataCleanPipeline, PipelineResult, PipelineType
 from data_train.tokenization import TokenizationResult, TokenizerConfig, BPETokenizer
 ENV_FILE_PATH = ".env"
 BASEDATA_PATH = "/home/migtronix/llm-data-pre-training"
@@ -312,9 +312,10 @@ async def generate_pubmed_abstracts_jsonl(
 # --- Example Usage with Pydantic V2 ---
 def run_complete_clean_tokenize_pipeline(
         input_jsonl_path: str = "path/to/your/pubmed_abstracts.jsonl",
-        output_clean_dir: str = "processed_data_pydantic"
+        output_clean_dir: str = "processed_data_pydantic",
+        pipeline_record_type: str = PipelineType.PUBMED
     ) -> PipelineResult:
-    """Run the complete PubMed processing pipeline with Pydantic V2"""
+    """Run the complete clean processing pipeline with Pydantic V2"""
     
     # Configuration with Pydantic validation
     config = PipelineConfig(
@@ -330,11 +331,12 @@ def run_complete_clean_tokenize_pipeline(
             detect_patient_ids=True,
             detect_demographics=True
         ),
-        batch_size=1000
+        batch_size=1000,
+        pipeline_type=pipeline_record_type if isinstance(pipeline_record_type, PipelineType) else PipelineType.PUBMED
     )
     
     # Run the pipeline
-    pipeline = PubMedPipeline(config)
+    pipeline = JsonlDataCleanPipeline(config)
     result = pipeline.run_pipeline()
     
     # Log results
@@ -478,7 +480,8 @@ async def main():
                 and int(f'{pubmed_extraction_stats.get("output_size_mb","0")}') > 0:
                     clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
                         input_jsonl_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
-                        output_clean_dir=CLEANDATA_PATH
+                        output_clean_dir=CLEANDATA_PATH,
+                        pipeline_record_type=PipelineType.PUBMED
                     )
             if clean_tokenize_stats and clean_tokenize_stats.success:
                 logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
@@ -499,7 +502,8 @@ async def main():
                 and int(f'{github_extraction_stats.get("output_size_mb","0")}') > 0:
                     clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
                         input_jsonl_path=f"{PRECLEANDATA_PATH}/{GITHUB_EXTRACT_FILE}",
-                        output_clean_dir=CLEANDATA_PATH
+                        output_clean_dir=CLEANDATA_PATH,
+                        pipeline_record_type=PipelineType.GITHUB
                     )
             if clean_tokenize_stats and clean_tokenize_stats.success:
                 logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
@@ -520,7 +524,8 @@ async def main():
                 and int(f'{wiki_extraction_stats.get("output_size_mb","0")}') > 0:
                     clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
                         input_jsonl_path=f"{PRECLEANDATA_PATH}/{WIKI_EXTRACT_FILE}",
-                        output_clean_dir=CLEANDATA_PATH
+                        output_clean_dir=CLEANDATA_PATH,
+                        pipeline_record_type=PipelineType.WIKI
                     )
             if clean_tokenize_stats and clean_tokenize_stats.success:
                 logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
