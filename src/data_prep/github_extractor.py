@@ -30,6 +30,13 @@ class SourceFormat(str, Enum):
     JSONL = "jsonl"
     UNKNOWN = "unknown"
 
+# --- Pydantic V2 Models ---
+class PipelineType(str, Enum):
+    PUBMED = "pubmed"
+    GITHUB = "github"
+    WIKI = "wikipedia"
+
+
 class GitHubRecord(BaseModel):
     """Pydantic V2 model for GitHub records"""
     model_config = ConfigDict(

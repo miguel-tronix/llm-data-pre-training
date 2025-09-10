@@ -33,8 +33,14 @@ class PIIDetectionConfig(BaseModel):
     
     model_config = ConfigDict(extra='forbid')
 
+# --- Pydantic V2 Models ---
+class PipelineType(str, Enum):
+    PUBMED = "pubmed"
+    GITHUB = "github"
+    WIKI = "wikipedia"
+
 class PipelineConfig(BaseModel):
-    """Configuration for the PubMed processing pipeline"""
+    """Configuration for the processing pipeline"""
     input_path: Path = Field(..., description="Path to input JSONL file")
     output_dir: Path = Field(..., description="Output directory for processed files")
     min_abstract_length: int = Field(default=100, ge=10, le=1000, description="Minimum abstract length in characters")
@@ -42,6 +48,7 @@ class PipelineConfig(BaseModel):
     deduplication_method: DeduplicationMethod = Field(default=DeduplicationMethod.CONTENT_HASH, description="Deduplication method")
     pii_config: PIIDetectionConfig = Field(default_factory=PIIDetectionConfig, description="PII detection configuration")
     batch_size: int = Field(default=1000, ge=100, le=10000, description="Batch size for processing")
+    pipeline_type: PipelineType = Field(default=PipelineType.PUBMED, description="Type of pipeline")
     
     @field_validator('input_path')
     @classmethod
@@ -60,7 +67,7 @@ class PipelineConfig(BaseModel):
         return v
 
 class ProcessedRecord(BaseModel):
-    """Model for processed PubMed abstract records"""
+    """Model for processe PipelineType abstract records"""
     id: str = Field(..., description="Unique identifier")
     text: str = Field(..., description="Cleaned abstract text", min_length=1)
     source: str = Field(default="pubmed", description="Data source format")
@@ -123,8 +130,8 @@ class ParallelZstdReaderConfig(BaseModel):
         return v
 
 # --- PubMed Processing Pipeline with Pydantic V2 ---
-class PubMedPipeline:
-    """Complete pipeline for processing PubMed abstracts using Pydantic V2"""
+class JsonlDataCleanPipeline:
+    """Complete pipeline for processing jsonl abstracts using Pydantic V2"""
     
     def __init__(self, config: PipelineConfig):
         self.config = config
@@ -198,7 +205,7 @@ class PubMedPipeline:
         return hashlib.md5(text.encode('utf-8')).hexdigest()
     
     def process_record(self, record: Dict[str, Any]) -> Optional[ProcessedRecord]:
-        """Process a single PubMed abstract record using Pydantic model"""
+        """Process a single PipelineType abstract record using Pydantic model"""
         
         # Extract abstract text
         abstract_text = record.get('abstract_text', '') or record.get('text', '') or record.get('abstract', '')
@@ -224,7 +231,7 @@ class PubMedPipeline:
             processed_data = {
                 'id': record.get('id', ''),
                 'text': cleaned_text,
-                'source': record.get('source', 'pubmed'),
+                'source': record.get('source', self.config.pipeline_type.value  if isinstance(self.config.pipeline_type, PipelineType) else 'pubmed'),
                 'metadata': {
                     'original_length': len(abstract_text),
                     'cleaned_length': len(cleaned_text),
@@ -274,7 +281,7 @@ class PubMedPipeline:
         import time
         start_time = time.time()
         
-        logger.info("Starting PubMed abstract processing pipeline with Pydantic V2")
+        logger.info("Starting PipelineType abstract processing pipeline with Pydantic V2")
         
         # Initialize counters
         stats = {
