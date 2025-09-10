@@ -26,6 +26,9 @@ PUBMED_EXTRACT_FILE = "pubmed_abstracts.jsonl"
 GITHUB_EXTRACT_FILE = "github_records.jsonl"
 WIKI_EXTRACT_FILE = "wikipedia_articles.jsonl"
 PARALLEL_EXECS = 4
+PUBMED_JSONL_SIZE_MB = 50
+GITHUB_JSONL_SIZE_MB = 50
+WIKI_JSONL_SIZE_MB = 20
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -187,7 +190,11 @@ async def run_pubmed_extraction(
         Either statistics dict (if writing to file) or list of PubMedAbstract objects
     """
     
-    extractor = PubMedAbstractExtractor(use_parallel_zstd=True, num_processes=1)
+    extractor = PubMedAbstractExtractor(
+        use_parallel_zstd=True, 
+        num_processes=1,
+        file_size_mb=PUBMED_JSONL_SIZE_MB
+    )
     
     logger.info("Starting PubMed abstract extraction...")
     
@@ -220,7 +227,11 @@ async def run_github_extraction(
         Either statistics dict (if writing to file) or list of GitHubRecord objects
     """
     
-    extractor = GitHubRecordExtractor(use_parallel_zstd=True, num_processes=1)
+    extractor = GitHubRecordExtractor(
+        use_parallel_zstd=True, 
+        num_processes=1,
+        file_size_mb=GITHUB_JSONL_SIZE_MB
+    )
     
     logger.info("Starting PubMed abstract extraction...")
     
@@ -253,7 +264,10 @@ async def run_wikipedia_extraction(
         Either statistics dict (if writing to file) or list of GitHubRecord objects
     """
     
-    extractor = WikiArticleExtractor(use_parallel_zstd=True, num_processes=1)
+    extractor = WikiArticleExtractor(
+        use_parallel_zstd=True, 
+        num_processes=1,
+        file_size_mb=WIKI_JSONL_SIZE_MB)
     
     logger.info("Starting Wikipedia article extraction...")
     
@@ -529,6 +543,9 @@ if __name__ == "__main__":
     PUBMED_EXTRACT_FILE = os.getenv("PUBMED_EXTRACT_FILE",PUBMED_EXTRACT_FILE)
     GITHUB_EXTRACT_FILE = os.getenv("GITHUB_EXTRACT_FILE",GITHUB_EXTRACT_FILE)
     WIKI_EXTRACT_FILE = os.getenv("WIKI_EXTRACT_FILE",WIKI_EXTRACT_FILE)
+    PUBMED_JSONL_SIZE_MB = int(f"{os.getenv('PUBMED_JSONL_SIZE_MB',PUBMED_JSONL_SIZE_MB)}")
+    GITHUB_JSONL_SIZE_MB = int(f"{os.getenv('GITHUB_JSONL_SIZE_MB',GITHUB_JSONL_SIZE_MB)}")
+    WIKI_JSONL_SIZE_MB = int(f"{os.getenv('WIKI_JSONL_SIZE_MB',WIKI_JSONL_SIZE_MB)}")
     PARALLEL_EXECS = int(f"{os.getenv('NUM_PROCESSES',PARALLEL_EXECS)}")
     BPE_CORPUS_FILE = f"{os.getenv('BPE_CORPUS_FILE',BPE_CORPUS_FILE)}"
     asyncio.run(main())
