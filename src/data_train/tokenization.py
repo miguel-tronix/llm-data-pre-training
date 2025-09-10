@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Union, Optional, List, Dict, Any
 from pydantic import BaseModel, Field, field_validator
+from data_clean.clean_and_tokenize import PipelineType
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
@@ -72,10 +73,15 @@ class TokenizationResult(BaseModel):
 class BPETokenizer:
     """BPE Tokenizer for converting text to tokens using Pydantic V2"""
     
-    def __init__(self, config: Optional[TokenizerConfig] = None):
+    def __init__(
+            self, 
+            config: Optional[TokenizerConfig] = None,
+            pipeline_type: PipelineType = PipelineType.PUBMED
+    ):
         self.config = config or TokenizerConfig()
         self.tokenizer = Tokenizer(BPE(unk_token="[UNK]"))
         self.is_trained = False
+        self.pipeline_type = pipeline_type
     
     def train(self, corpus_path: Union[str, Path]) -> None:
         """Train BPE tokenizer on corpus"""
@@ -121,10 +127,10 @@ class BPETokenizer:
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # Save tokenizer
-        self.tokenizer.save(str(output_dir / "tokenizer.json"))
+        self.tokenizer.save(str(output_dir / f"tokenizer_{self.pipeline_type.value}.json"))
         
         # Save config
-        config_path = output_dir / "tokenizer_config.json"
+        config_path = output_dir / f"tokenizer_config_{self.pipeline_type.value}.json"
         with open(config_path, "w") as f:
             f.write(self.config.model_dump_json(indent=2))
         
@@ -135,10 +141,10 @@ class BPETokenizer:
         tokenizer_dir = Path(tokenizer_dir)
         
         # Load tokenizer
-        self.tokenizer = Tokenizer.from_file(str(tokenizer_dir / "tokenizer.json"))
+        self.tokenizer = Tokenizer.from_file(str(tokenizer_dir / f"tokenizer_{self.pipeline_type.value}.json"))
         
         # Load config
-        config_path = tokenizer_dir / "tokenizer_config.json"
+        config_path = tokenizer_dir / f"tokenizer_config_{self.pipeline_type.value}.json"
         if config_path.exists():
             with open(config_path, "r") as f:
                 config_data = json.load(f)
@@ -204,7 +210,7 @@ class BPETokenizer:
             "tokenizer_config": self.config.model_dump()
         }
         
-        with open(output_path.parent / "tokenization_metadata.json", "w") as f:
+        with open(output_path.parent / f"tokenization_metadata_{self.pipeline_type.value}.json", "w") as f:
             json.dump(metadata, f, indent=2)
         
         logger.info(f"Tokenization complete. Saved {total_tokens} tokens to {output_path}")
