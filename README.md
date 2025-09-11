@@ -29,7 +29,7 @@ A high-performance pipeline for processing HuggingFace Uncopyrighted Pile record
    # Run with resource limits
    docker run -it --rm \
    --memory=4g \
-   --cpus=2 \
+   --cpus=4 \
    -v $(pwd)/rawdata:/opt/llm-data-pretraining/rawdata \
    -v $(pwd)/preclean:/opt/llm-data-pretraining/precleandata \
    -v $(pwd)/cleandata:/opt/llm-data-pretraining/cleandata \
