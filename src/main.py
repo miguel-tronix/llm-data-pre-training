@@ -365,6 +365,7 @@ def run_complete_clean_tokenize_pipeline(
 def run_tokenization_pipeline(
     corpus_path: Union[str, Path],
     output_dir: Union[str, Path],
+    pipeline_record_type: PipelineType = PipelineType.PUBMED,
     vocab_size: int = 30000,
     min_frequency: int = 2,
     max_length: int = 512
@@ -393,7 +394,7 @@ def run_tokenization_pipeline(
     tokenizer.save_tokenizer(output_dir / "tokenizer")
     
     # Tokenize corpus and save as binary
-    tokens_path = output_dir / "tokens.bin"
+    tokens_path = output_dir / f"tokens_{pipeline_record_type.value}.bin"
     total_tokens = tokenizer.tokenize_corpus(corpus_path, tokens_path)
     
     # Create and return result
@@ -488,7 +489,8 @@ async def main():
                 logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
                 bpe_tokenize_stats = run_tokenization_pipeline(
                     corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
-                    output_dir= TRAINDATA_PATH
+                    output_dir= TRAINDATA_PATH,
+                    pipeline_record_type=PipelineType.PUBMED
                 )
                 logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
             
@@ -511,7 +513,8 @@ async def main():
                 logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
                 bpe_tokenize_stats = run_tokenization_pipeline(
                     corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
-                    output_dir= TRAINDATA_PATH
+                    output_dir= TRAINDATA_PATH,
+                    pipeline_record_type=PipelineType.GITHUB
                 )
                 logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
             
@@ -534,7 +537,8 @@ async def main():
                 logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
                 bpe_tokenize_stats = run_tokenization_pipeline(
                     corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
-                    output_dir= TRAINDATA_PATH
+                    output_dir= TRAINDATA_PATH,
+                    pipeline_record_type=PipelineType.WIKI
                 )
                 logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
     else:

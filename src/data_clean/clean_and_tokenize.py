@@ -322,11 +322,11 @@ class JsonlDataCleanPipeline:
                             stats['pii_removed'] += 1
         
         # Step 2: Deduplication
-        dedup_file = self.output_dir / "deduplicated_abstracts.jsonl"
+        dedup_file = self.output_dir / f"deduplicated_abstracts_{self.config.pipeline_type}.jsonl"
         unique_count, duplicates_removed, total_dedup = self.run_deduplication(processed_file, dedup_file)
         
         # Step 3: Prepare for tokenization
-        final_file = self.output_dir / "final_abstracts.jsonl"
+        final_file = self.output_dir / f"final_abstracts_{self.config.pipeline_type}.jsonl"
         self.prepare_for_tokenization(dedup_file, final_file)
         
         processing_time = time.time() - start_time
