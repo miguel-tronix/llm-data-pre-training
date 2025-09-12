@@ -463,13 +463,13 @@ async def main():
 #    chunk_size=32768,                 # Larger chunk size for faster downloads
 #    max_files=1
 #    )
-    BPE_CORPUS_FILE = f"training_corpus_{PipelineType.PUBMED.value}.txt"
     if download_result.success:
         # Extract PubMed abstracts from downloaded files
         for file_path in download_result.downloaded_files:
             pubmed_extraction_stats = None
             clean_tokenize_stats = None
             bpe_tokenize_stats = None
+            
             pubmed_extraction_stats = await run_pubmed_extraction(
                 input_path=f"{RAWDATA_PATH}/{file_path}",
                 output_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
@@ -485,14 +485,14 @@ async def main():
                         output_clean_dir=CLEANDATA_PATH,
                         pipeline_record_type=PipelineType.PUBMED
                     )
-            if clean_tokenize_stats and clean_tokenize_stats.success:
-                logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
-                bpe_tokenize_stats = run_tokenization_pipeline(
-                    corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
-                    output_dir= TRAINDATA_PATH,
-                    pipeline_record_type=PipelineType.PUBMED
-                )
-                logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
+                if clean_tokenize_stats and clean_tokenize_stats.success:
+                    logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
+                    bpe_tokenize_stats = run_tokenization_pipeline(
+                        corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
+                        output_dir= TRAINDATA_PATH,
+                        pipeline_record_type=PipelineType.PUBMED
+                    )
+                    logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
             
             github_extraction_stats = await run_github_extraction(
                 input_path=f"{RAWDATA_PATH}/{file_path}",
@@ -509,14 +509,14 @@ async def main():
                         output_clean_dir=CLEANDATA_PATH,
                         pipeline_record_type=PipelineType.GITHUB
                     )
-            if clean_tokenize_stats and clean_tokenize_stats.success:
-                logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
-                bpe_tokenize_stats = run_tokenization_pipeline(
-                    corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
-                    output_dir= TRAINDATA_PATH,
-                    pipeline_record_type=PipelineType.GITHUB
-                )
-                logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
+                if clean_tokenize_stats and clean_tokenize_stats.success:
+                    logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
+                    bpe_tokenize_stats = run_tokenization_pipeline(
+                        corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
+                        output_dir= TRAINDATA_PATH,
+                        pipeline_record_type=PipelineType.GITHUB
+                    )
+                    logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
             
             wiki_extraction_stats = await run_wikipedia_extraction(
                 input_path=f"{RAWDATA_PATH}/{file_path}",
@@ -533,14 +533,14 @@ async def main():
                         output_clean_dir=CLEANDATA_PATH,
                         pipeline_record_type=PipelineType.WIKI
                     )
-            if clean_tokenize_stats and clean_tokenize_stats.success:
-                logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
-                bpe_tokenize_stats = run_tokenization_pipeline(
-                    corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
-                    output_dir= TRAINDATA_PATH,
-                    pipeline_record_type=PipelineType.WIKI
-                )
-                logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
+                if clean_tokenize_stats and clean_tokenize_stats.success:
+                    logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
+                    bpe_tokenize_stats = run_tokenization_pipeline(
+                        corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
+                        output_dir= TRAINDATA_PATH,
+                        pipeline_record_type=PipelineType.WIKI
+                    )
+                    logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
     else:
         logger.error(f"Download failed: {download_result.message}")
         return None
