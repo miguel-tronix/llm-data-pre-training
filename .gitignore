@@ -49,7 +49,7 @@ rawdata/
 precleandata/
 cleandata/
 traindata/
-logs
+logs/
 *.parquet
 *.zst
 *.jsonl
