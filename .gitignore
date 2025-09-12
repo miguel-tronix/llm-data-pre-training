@@ -47,16 +47,17 @@ Thumbs.db
 # logging
 logs/
 *.log
-pretraining_pipeline.log
 
 # Project specific
 rawdata/
 precleandata/
 cleandata/
 traindata/
+logs/
 *.parquet
 *.zst
 *.jsonl
 *.txt
 *.sh
 *.csv
+*.log
