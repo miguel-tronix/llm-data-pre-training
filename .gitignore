@@ -49,8 +49,11 @@ rawdata/
 precleandata/
 cleandata/
 traindata/
+logs
 *.parquet
 *.zst
 *.jsonl
 *.txt
 *.sh
+*.log
+*.csv

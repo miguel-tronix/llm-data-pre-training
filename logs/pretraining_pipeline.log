@@ -1,1 +1,296 @@
 2025-09-12 12:19:49,698 - DEBUG - Using selector: EpollSelector
+2025-09-12 12:29:42,740 - INFO - Fetching file list for monology/pile-uncopyrighted
+2025-09-12 12:29:43,374 - INFO - Found 1 files to download
+2025-09-12 12:29:43,377 - INFO - Skipping train/00.jsonl.zst (already exists and complete)
+2025-09-12 12:29:43,379 - INFO - Starting PubMed abstract extraction...
+2025-09-12 12:29:43,741 - INFO - Processing 10636 chunks with 1 processes
+2025-09-12 12:29:46,786 - INFO - Extracted 1000 abstracts, current size: 5MB
+2025-09-12 12:29:49,369 - INFO - Extracted 2000 abstracts, current size: 10MB
+2025-09-12 12:29:49,388 - INFO - Processed 10000 records
+2025-09-12 12:29:52,500 - INFO - Extracted 3000 abstracts, current size: 15MB
+2025-09-12 12:29:55,462 - INFO - Extracted 4000 abstracts, current size: 20MB
+2025-09-12 12:29:55,517 - INFO - Processed 20000 records
+2025-09-12 12:29:58,600 - INFO - Extracted 5000 abstracts, current size: 25MB
+2025-09-12 12:30:01,978 - INFO - Extracted 6000 abstracts, current size: 30MB
+2025-09-12 12:30:02,059 - INFO - Processed 30000 records
+2025-09-12 12:30:04,848 - INFO - Extracted 7000 abstracts, current size: 35MB
+2025-09-12 12:30:08,034 - INFO - Extracted 8000 abstracts, current size: 40MB
+2025-09-12 12:30:08,111 - INFO - Processed 40000 records
+2025-09-12 12:30:12,263 - INFO - Extracted 9000 abstracts, current size: 45MB
+2025-09-12 12:30:15,331 - INFO - Completed extraction of 9862 abstracts, total size: 50.02MB
+2025-09-12 12:30:15,332 - INFO - Extraction completed successfully!
+2025-09-12 12:30:15,332 - INFO - Extracted {'processed': 49068, 'valid': 9862, 'invalid': 0, 'output_size_mb': 50}
+2025-09-12 12:30:15,334 - INFO - Starting PipelineType abstract processing pipeline with Pydantic V2
+2025-09-12 12:30:15,343 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,343 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,469 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,469 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,474 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,474 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,601 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,602 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,607 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,607 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,728 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,729 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,732 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,733 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,865 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,865 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,869 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,869 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,997 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:15,997 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,001 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,001 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,132 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,133 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,136 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,136 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,248 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,248 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,251 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,251 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,363 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,364 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,367 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,367 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,483 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,483 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,486 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,487 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,602 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,602 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,605 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,606 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,720 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,720 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,724 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,724 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,844 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,845 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,848 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,849 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,970 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,970 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,973 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:16,973 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,084 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,084 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,088 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,088 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,201 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,202 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,205 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,205 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,318 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,318 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,322 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,322 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,434 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,435 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,438 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,438 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,550 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,551 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,554 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,554 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,665 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,666 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,669 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,669 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,782 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,782 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,786 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,786 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,903 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,903 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,906 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:17,907 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,013 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,014 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,017 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,017 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,127 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,127 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,130 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,131 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,246 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,246 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,249 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,250 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,373 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,373 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,378 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,378 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,488 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,488 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,492 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,492 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,598 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,598 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,601 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,601 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,711 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,712 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,715 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,715 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,829 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,830 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,833 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,834 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,952 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,952 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,955 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:18,955 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,063 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,063 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,067 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,067 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,174 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,174 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,177 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,178 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,285 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,285 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,288 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,289 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,395 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,395 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,398 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,398 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,504 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,505 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,508 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,508 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,615 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,615 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,619 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,619 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,726 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,726 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,729 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,729 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,840 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,840 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,843 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,844 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,953 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,953 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,956 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:19,956 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,067 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,067 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,071 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,071 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,181 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,181 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,185 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,185 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,295 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,295 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,298 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,298 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,409 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,409 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,412 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,413 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,529 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,530 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,533 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,533 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,652 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,652 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,656 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,656 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,771 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,772 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,775 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,775 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,886 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,886 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,889 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,889 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,994 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,995 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,998 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:20,998 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:21,103 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:21,104 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:21,107 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:21,107 - DEBUG - Found demographics PII in text
+2025-09-12 12:30:21,788 - INFO - Pipeline completed in 6.45 seconds
+2025-09-12 12:30:21,796 - INFO - Results: {
+  "success": true,
+  "input_records": 9862,
+  "output_records": 199,
+  "duplicates_removed": 9564,
+  "pii_records_removed": 99,
+  "short_records_removed": 0,
+  "final_file": "/home/migtronix/llm-data-pre-training/cleandata/final_abstracts_pubmed.jsonl",
+  "processing_time": 6.453509330749512
+}
+2025-09-12 12:30:21,826 - INFO - Created training corpus with 199 lines
+2025-09-12 12:30:21,826 - INFO - Files ready for BPE tokenizer training:
+2025-09-12 12:30:21,826 - INFO - Final dataset: /home/migtronix/llm-data-pre-training/cleandata/final_abstracts_pubmed.jsonl
+2025-09-12 12:30:21,826 - INFO - Training corpus: /home/migtronix/llm-data-pre-training/cleandata/training_corpus_pubmed.txt
+2025-09-12 12:30:21,827 - INFO - Produced a training corpus at: /home/migtronix/llm-data-pre-training/cleandata/final_abstracts_pubmed.jsonl
+2025-09-12 12:30:21,836 - INFO - Training BPE tokenizer on /home/migtronix/llm-data-pre-training/cleandata/training_corpus_pubmed.txt
+2025-09-12 12:30:23,300 - INFO - Tokenizer trained with vocabulary size: 7449
+2025-09-12 12:30:23,304 - INFO - Tokenizer saved to /home/migtronix/llm-data-pre-training/traindata/tokenizer
+2025-09-12 12:30:23,304 - INFO - Tokenizing corpus: /home/migtronix/llm-data-pre-training/cleandata/training_corpus_pubmed.txt
+2025-09-12 12:30:23,381 - INFO - Tokenization complete. Saved 47797 tokens to /home/migtronix/llm-data-pre-training/traindata/tokens_pubmed.bin
+2025-09-12 12:30:23,383 - INFO - Tokenization pipeline complete. Files saved to /home/migtronix/llm-data-pre-training/traindata
+2025-09-12 12:30:23,384 - INFO - {
+  "success": true,
+  "output_dir": "/home/migtronix/llm-data-pre-training/traindata",
+  "vocab_size": 7449,
+  "total_tokens": 47797,
+  "tokenizer_config": {
+    "vocab_size": 30000,
+    "min_frequency": 2,
+    "special_tokens": [
+      "[PAD]",
+      "[UNK]",
+      "[CLS]",
+      "[SEP]",
+      "[MASK]",
+      "<|endoftext|>"
+    ],
+    "max_length": 512
+  }
+}
+2025-09-12 12:30:23,385 - INFO - Starting GitHub record extraction...
+2025-09-12 12:30:29,927 - INFO - Processing 10636 chunks with 1 processes
+2025-09-12 12:30:33,218 - INFO - Extracted 1000 records, current size: 2MB
+2025-09-12 12:30:33,328 - INFO - Processed 10000 records
+2025-09-12 12:30:35,466 - INFO - Extracted 2000 records, current size: 5MB
+2025-09-12 12:30:35,599 - INFO - Processed 20000 records
+2025-09-12 12:30:38,037 - INFO - Extracted 3000 records, current size: 8MB
+2025-09-12 12:30:38,229 - INFO - Processed 30000 records
+2025-09-12 12:30:40,347 - INFO - Extracted 4000 records, current size: 11MB
+2025-09-12 12:30:40,600 - INFO - Processed 40000 records
+2025-09-12 12:30:42,511 - INFO - Extracted 5000 records, current size: 14MB
+2025-09-12 12:30:42,835 - INFO - Processed 50000 records
+2025-09-12 12:30:46,017 - INFO - Extracted 6000 records, current size: 16MB
+2025-09-12 12:30:46,377 - INFO - Processed 60000 records
+2025-09-12 12:30:48,175 - INFO - Extracted 7000 records, current size: 19MB
+2025-09-12 12:30:48,610 - INFO - Processed 70000 records
+2025-09-12 12:30:50,458 - INFO - Extracted 8000 records, current size: 22MB
+2025-09-12 12:30:51,042 - INFO - Processed 80000 records
+2025-09-12 12:30:52,611 - INFO - Extracted 9000 records, current size: 25MB
+2025-09-12 12:30:53,188 - INFO - Processed 90000 records
+2025-09-12 12:30:54,815 - INFO - Extracted 10000 records, current size: 28MB
+2025-09-12 12:30:55,444 - INFO - Processed 100000 records
+2025-09-12 12:30:57,070 - INFO - Extracted 11000 records, current size: 30MB
+2025-09-12 12:30:57,743 - INFO - Processed 110000 records
+2025-09-12 12:30:59,045 - INFO - Extracted 12000 records, current size: 33MB
+2025-09-12 12:30:59,861 - INFO - Processed 120000 records
+2025-09-12 12:31:01,179 - INFO - Extracted 13000 records, current size: 36MB
+2025-09-12 12:31:02,017 - INFO - Processed 130000 records
+2025-09-12 12:31:03,355 - INFO - Extracted 14000 records, current size: 39MB
+2025-09-12 12:31:04,459 - INFO - Processed 140000 records
+2025-09-12 12:31:05,703 - INFO - Extracted 15000 records, current size: 42MB
+2025-09-12 12:31:06,733 - INFO - Processed 150000 records
+2025-09-12 12:31:07,977 - INFO - Extracted 16000 records, current size: 44MB
+2025-09-12 12:31:09,771 - INFO - Processed 160000 records
