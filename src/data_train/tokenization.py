@@ -11,8 +11,10 @@ import numpy as np
 import logging
 from tqdm import tqdm
 import json
+from utils.pipeline_logger import get_pipeline_logger
 
-logger = logging.getLogger(__name__)
+#set up logger
+logger = get_pipeline_logger()
 
 class TokenizerConfig(BaseModel):
     """Configuration for BPE tokenizer training using Pydantic V2"""

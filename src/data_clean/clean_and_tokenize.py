@@ -12,10 +12,9 @@ import mmap
 from enum import Enum
 from contextlib import contextmanager
 from data_prep.fast_zst_reader import ParallelZstdJsonlReader
-
+from utils.pipeline_logger import get_pipeline_logger
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = get_pipeline_logger()
 
 # --- Pydantic V2 Models ---
 class DeduplicationMethod(str, Enum):

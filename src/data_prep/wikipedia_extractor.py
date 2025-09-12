@@ -11,11 +11,10 @@ from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime
 import hashlib
 from enum import Enum
+from utils.pipeline_logger import get_pipeline_logger
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
+logger = get_pipeline_logger()
 # Try to import ParallelZstdJsonlReader
 try:
     from .fast_zst_reader import ParallelZstdJsonlReader, process_large_zstd_file_parallel as zstreader

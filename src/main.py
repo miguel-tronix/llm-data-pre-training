@@ -3,9 +3,10 @@ import asyncio
 import logging
 import os
 import typer
-from dotenv import load_dotenv as env
+from dotenv import load_dotenv as setenvs
 from typing import Dict, Any, Optional, Union
 from pathlib import Path
+from utils.pipeline_logger import get_pipeline_logger
 from data_fetch.download_utils import DownloadResult, DownloadConfig, HFDatasetDownloader
 from data_prep.pubmed_extractor import PubMedAbstractExtractor
 from data_prep.github_extractor import GitHubRecordExtractor
@@ -30,8 +31,8 @@ PUBMED_JSONL_SIZE_MB = 50
 GITHUB_JSONL_SIZE_MB = 50
 WIKI_JSONL_SIZE_MB = 20
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = get_pipeline_logger()
+
 
 
 from pathlib import Path
@@ -546,7 +547,7 @@ async def main():
         return None
     
 if __name__ == "__main__":
-    env(ENV_FILE_PATH)
+    setenvs(ENV_FILE_PATH)
     BASEDATA_PATH = os.getenv("BASEDATA_PATH",BASEDATA_PATH)
     RAWDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('RAWDATA_PATH',RAWDATA_PATH)}"
     PRECLEANDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('PRECLEANDATA_PATH',PRECLEANDATA_PATH)}"
@@ -560,5 +561,8 @@ if __name__ == "__main__":
     WIKI_JSONL_SIZE_MB = int(f"{os.getenv('WIKI_JSONL_SIZE_MB',WIKI_JSONL_SIZE_MB)}")
     PARALLEL_EXECS = int(f"{os.getenv('NUM_PROCESSES',PARALLEL_EXECS)}")
     BPE_CORPUS_FILE = f"{os.getenv('BPE_CORPUS_FILE',BPE_CORPUS_FILE)}"
+    LOG_FILE = os.getenv("LOG_FILE","logs/pretraining_pipeline.log")
+    LOG_LEVEL = os.getenv("LOG_LEVEL","DEBUG")
+    LOG_FORMATTER = os.getenv("LOG_FORMATTER","%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     asyncio.run(main())
     

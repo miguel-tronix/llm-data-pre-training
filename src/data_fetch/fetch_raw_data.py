@@ -14,11 +14,9 @@ import os
 import requests
 from concurrent.futures import ProcessPoolExecutor
 import functools
+from utils.pipeline_logger import get_pipeline_logger
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
+logger = get_pipeline_logger()
 
 # --- Top-level worker function for multiprocessing ---
 def _download_chunk_process(

@@ -9,10 +9,10 @@ import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor
 import itertools
 from functools import partial
+from utils.pipeline_logger import get_pipeline_logger
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = get_pipeline_logger()
 
 class ParallelZstdJsonlReader:
     """Parallel reader for Zstandard-compressed JSONL files using memory mapping"""
