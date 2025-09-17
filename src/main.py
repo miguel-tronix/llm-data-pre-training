@@ -7,10 +7,12 @@ from dotenv import load_dotenv as setenvs
 from typing import Dict, Any, Optional, Union
 from pathlib import Path
 from utils.pipeline_logger import get_pipeline_logger
+from data_prep.configs import ProcessingStats, PipelineType
 from data_fetch.download_utils import DownloadResult, DownloadConfig, HFDatasetDownloader
 from data_prep.pubmed_extractor import PubMedAbstractExtractor
 from data_prep.github_extractor import GitHubRecordExtractor
 from data_prep.wikipedia_extractor import WikiArticleExtractor
+from data_prep.allenai_extractor import WebRecordExtractor
 from data_clean.clean_and_tokenize import DeduplicationMethod,\
       PipelineConfig, TokenizationConfig, TokenizationPreparer, \
     PIIDetectionConfig, JsonlDataCleanPipeline, PipelineResult, PipelineType
@@ -26,10 +28,12 @@ BPE_CORPUS_FILE = "training_corpus.txt"
 PUBMED_EXTRACT_FILE = "pubmed_abstracts.jsonl"
 GITHUB_EXTRACT_FILE = "github_records.jsonl"
 WIKI_EXTRACT_FILE = "wikipedia_articles.jsonl"
+WEB_EXTRACT_FILE = "web_c4_records.jsonl"
 PARALLEL_EXECS = 4
 PUBMED_JSONL_SIZE_MB = 50
 GITHUB_JSONL_SIZE_MB = 50
 WIKI_JSONL_SIZE_MB = 20
+WEB_JSONL_SIZE_MB = 50
 
 logger = get_pipeline_logger()
 
@@ -284,12 +288,49 @@ async def run_wikipedia_extraction(
         logger.info("Extraction completed successfully!")
         return stats
 
+async def run_allenai_extraction(
+    input_path: str, 
+    output_path: Optional[str] = None,
+    return_objects: bool = False
+) -> Any:
+    """
+    Main coroutine to extract Wikipedia articles from Pile-Uncopyrighted dataset
+    
+    Args:
+        input_path: Path to input dataset file
+        output_path: Path to output JSONL file (required if return_objects=False)
+        return_objects: If True, returns list of objects instead of writing to file
+        
+    Returns:
+        Either statistics dict (if writing to file) or list of GitHubRecord objects
+    """
+    
+    extractor = WebRecordExtractor(
+        use_parallel_zstd=False,
+        use_streaming=True, 
+        num_processes=1,
+        file_size_mb=WEB_JSONL_SIZE_MB)
+    
+    logger.info("Starting Wikipedia article extraction...")
+    
+    if return_objects:
+        records = await extractor.extract_articles_to_memory(input_path)
+        logger.info(f"Extracted {len(records)} abstracts to memory")
+        return records
+    else:
+        if not output_path:
+            raise ValueError("output_path is required when return_objects=False")
+            
+        stats = await extractor.extract_articles_to_file(input_path, output_path)
+        logger.info("Extraction completed successfully!")
+        return stats
+
 # New routine specifically for generating pubmed_abstracts.jsonl
 async def generate_pubmed_abstracts_jsonl(
     input_zst_path: Path,
     output_jsonl_path: Path,
     max_abstracts: Optional[int] = None
-) -> Dict[str, Any]:
+) -> ProcessingStats:
     """
     Generate pubmed_abstracts.jsonl from a ZST file using parallel processing
     
@@ -471,7 +512,7 @@ async def main():
             clean_tokenize_stats = None
             bpe_tokenize_stats = None
             
-            pubmed_extraction_stats = await run_pubmed_extraction(
+            pubmed_extraction_stats  = await run_pubmed_extraction(
                 input_path=f"{RAWDATA_PATH}/{file_path}",
                 output_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
                 return_objects=False
@@ -479,8 +520,8 @@ async def main():
             if pubmed_extraction_stats:
                 BPE_CORPUS_FILE = f"training_corpus_{PipelineType.PUBMED.value}.txt"
                 logger.info(f"Extracted {pubmed_extraction_stats}")
-                if isinstance(pubmed_extraction_stats, Dict) \
-                and int(f'{pubmed_extraction_stats.get("output_size_mb","0")}') > 0:
+                if isinstance(pubmed_extraction_stats, ProcessingStats) \
+                and int(f'{pubmed_extraction_stats.output_size_mb}') > 0:
                     clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
                         input_jsonl_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
                         output_clean_dir=CLEANDATA_PATH,
@@ -503,8 +544,8 @@ async def main():
             if github_extraction_stats:
                 BPE_CORPUS_FILE = f"training_corpus_{PipelineType.GITHUB.value}.txt"
                 logger.info(f"Extracted {github_extraction_stats}")
-                if isinstance(github_extraction_stats, Dict) \
-                and int(f'{github_extraction_stats.get("output_size_mb","0")}') > 0:
+                if isinstance(github_extraction_stats, ProcessingStats) \
+                and int(f'{github_extraction_stats.output_size_mb}') > 0:
                     clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
                         input_jsonl_path=f"{PRECLEANDATA_PATH}/{GITHUB_EXTRACT_FILE}",
                         output_clean_dir=CLEANDATA_PATH,
@@ -527,8 +568,8 @@ async def main():
             if wiki_extraction_stats:
                 BPE_CORPUS_FILE = f"training_corpus_{PipelineType.WIKI.value}.txt"
                 logger.info(f"Extracted {wiki_extraction_stats}")
-                if isinstance(wiki_extraction_stats, Dict) \
-                and int(f'{wiki_extraction_stats.get("output_size_mb","0")}') > 0:
+                if isinstance(wiki_extraction_stats, ProcessingStats) \
+                and int(f'{wiki_extraction_stats.output_size_mb}') > 0:
                     clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
                         input_jsonl_path=f"{PRECLEANDATA_PATH}/{WIKI_EXTRACT_FILE}",
                         output_clean_dir=CLEANDATA_PATH,
@@ -544,7 +585,30 @@ async def main():
                     logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
     else:
         logger.error(f"Download failed: {download_result.message}")
-        return None
+    
+    web_extraction_stats = await run_allenai_extraction(
+                input_path=f"allenai/c4",
+                output_path=f"{PRECLEANDATA_PATH}/{WEB_EXTRACT_FILE}",
+                return_objects=False
+    )
+    if web_extraction_stats:
+        BPE_CORPUS_FILE = f"training_corpus_{PipelineType.WEB.value}.txt"
+        logger.info(f"Extracted {web_extraction_stats}")
+        if isinstance(web_extraction_stats, ProcessingStats) \
+        and int(f'{web_extraction_stats.output_size_mb}') > 0:
+            clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
+                input_jsonl_path=f"{PRECLEANDATA_PATH}/{WEB_EXTRACT_FILE}",
+                output_clean_dir=CLEANDATA_PATH,
+                pipeline_record_type=PipelineType.WEB
+            )
+            if clean_tokenize_stats and clean_tokenize_stats.success:
+                logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
+                bpe_tokenize_stats = run_tokenization_pipeline(
+                    corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
+                    output_dir= TRAINDATA_PATH,
+                    pipeline_record_type=PipelineType.WEB
+                )
+                logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
     
 if __name__ == "__main__":
     setenvs(ENV_FILE_PATH)
@@ -556,9 +620,11 @@ if __name__ == "__main__":
     PUBMED_EXTRACT_FILE = os.getenv("PUBMED_EXTRACT_FILE",PUBMED_EXTRACT_FILE)
     GITHUB_EXTRACT_FILE = os.getenv("GITHUB_EXTRACT_FILE",GITHUB_EXTRACT_FILE)
     WIKI_EXTRACT_FILE = os.getenv("WIKI_EXTRACT_FILE",WIKI_EXTRACT_FILE)
+    WEB_EXTRACT_FILE = os.getenv("WEB_EXTRACT_FILE",WEB_EXTRACT_FILE)
     PUBMED_JSONL_SIZE_MB = int(f"{os.getenv('PUBMED_JSONL_SIZE_MB',PUBMED_JSONL_SIZE_MB)}")
     GITHUB_JSONL_SIZE_MB = int(f"{os.getenv('GITHUB_JSONL_SIZE_MB',GITHUB_JSONL_SIZE_MB)}")
     WIKI_JSONL_SIZE_MB = int(f"{os.getenv('WIKI_JSONL_SIZE_MB',WIKI_JSONL_SIZE_MB)}")
+    WEB_JSONL_SIZE_MB = int(f"{os.getenv('WEB_JSONL_SIZE_MB',WEB_JSONL_SIZE_MB)}")
     PARALLEL_EXECS = int(f"{os.getenv('NUM_PROCESSES',PARALLEL_EXECS)}")
     BPE_CORPUS_FILE = f"{os.getenv('BPE_CORPUS_FILE',BPE_CORPUS_FILE)}"
     LOG_FILE = os.getenv("LOG_FILE","logs/pretraining_pipeline.log")

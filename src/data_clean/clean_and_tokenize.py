@@ -37,6 +37,7 @@ class PipelineType(str, Enum):
     PUBMED = "pubmed"
     GITHUB = "github"
     WIKI = "wikipedia"
+    WEB = "web_c4"
 
 class PipelineConfig(BaseModel):
     """Configuration for the processing pipeline"""
@@ -183,7 +184,7 @@ class JsonlDataCleanPipeline:
         except Exception:
             # Fallback to manual cleaning if validation fails
             text = re.sub(r'\s+', ' ', text.strip())
-            text = re.sub(r'^\s*(ABSTRACT|ABSTRAKT|RESUMEN)\s*[:-\s]*', '', text, flags=re.IGNORECASE)
+            #text = re.sub(r'^\s*(ABSTRACT|ABSTRAKT|RESUMEN)\s*[:-\s]*', '', text, flags=re.IGNORECASE)
             text = re.sub(r'\[.*?\]', '', text)
             text = re.sub(r'\(.*?\)', '', text)
             return text.strip()
@@ -193,7 +194,7 @@ class JsonlDataCleanPipeline:
         text_lower = text.lower()
         
         for pattern_name, pattern in self.pii_patterns.items():
-            if pattern.search(text):
+            if pattern.search(text_lower):
                 logger.debug(f"Found {pattern_name} PII in text")
                 return True
         
@@ -212,7 +213,8 @@ class JsonlDataCleanPipeline:
             record_text = record.get('code_text', '')
         elif self.config.pipeline_type == PipelineType.WIKI:
             record_text = record.get('article_text', '')
-        record_text_text = record.get(record_text, '') or record.get('text', '') or record.get('abstract', '')
+        elif self.config.pipeline_type == PipelineType.WEB:
+            record_text = record.get('web_text', '')
         if not record_text:
             return None
         
@@ -269,6 +271,7 @@ class JsonlDataCleanPipeline:
                         try:
                             record = ProcessedRecord(**record_data)
                             content_hash = record.metadata.get('content_hash', '')
+                            logger.debug(f"Processing record ID {record.id} with hash {content_hash}")
                             if content_hash and content_hash not in seen_hashes:
                                 seen_hashes.add(content_hash)
                                 writer.write(record.model_dump())
@@ -315,6 +318,8 @@ class JsonlDataCleanPipeline:
                             pipeline_type_text_elem = "code_text"
                         if self.config.pipeline_type == PipelineType.WIKI:
                             pipeline_type_text_elem = "article_text"
+                        if self.config.pipeline_type == PipelineType.WEB:
+                            pipeline_type_text_elem = "web_text"
                         if record.get(pipeline_type_text_elem) and len(record[pipeline_type_text_elem]) < self.config.min_abstract_length:
                             stats['short_removed'] += 1
                         elif self.contains_pii(record.get(pipeline_type_text_elem, '')):

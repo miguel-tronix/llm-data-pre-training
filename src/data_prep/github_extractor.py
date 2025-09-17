@@ -7,6 +7,7 @@ import os
 from typing import List, Optional, Dict, Any, Pattern
 import logging
 from pathlib import Path
+from .configs import SourceFormat, ProcessingStats, GitHubRecord
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime
 import hashlib
@@ -26,57 +27,6 @@ except ImportError:
     HAS_ZSTD_READER = False
     logger.warning("ParallelZstdJsonlReader not available. Falling back to standard processing.")
 
-# --- Pydantic V2 Models ---
-class SourceFormat(str, Enum):
-    TEXT = "text"
-    JSONL = "jsonl"
-    UNKNOWN = "unknown"
-
-# --- Pydantic V2 Models ---
-class PipelineType(str, Enum):
-    PUBMED = "pubmed"
-    GITHUB = "github"
-    WIKI = "wikipedia"
-
-
-class GitHubRecord(BaseModel):
-    """Pydantic V2 model for GitHub records"""
-    model_config = ConfigDict(
-        json_encoders={datetime: lambda v: v.isoformat()},
-        frozen=False,
-        extra='forbid'
-    )
-    
-    id: str = Field(..., description="Unique identifier for the abstract", min_length=1)
-    code_text: str = Field(..., description="The abstract content", min_length=10)
-    source: str = Field(default="pile-uncopyrighted", description="Source dataset")
-    extracted_at: datetime = Field(default_factory=datetime.now, description="Extraction timestamp")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
-    source_format: SourceFormat = Field(default=SourceFormat.UNKNOWN, description="Format of source data")
-    
-    @field_validator('code_text')
-    @classmethod
-    def validate_records_text(cls, v: str) -> str:
-        """Validate and clean abstract text"""
-        if not v or len(v.strip()) == 0:
-            raise ValueError("Abstract text cannot be empty")
-        
-        # Clean the text
-        v = re.sub(r'\s+', ' ', v).strip()
-        
-        if len(v) < 10:
-            raise ValueError("Abstract text is too short")
-            
-        return v
-    
-    @field_validator('id')
-    @classmethod
-    def validate_id(cls, v: str) -> str:
-        """Validate ID format"""
-        v = v.strip()
-        if not v:
-            raise ValueError("ID cannot be empty")
-        return v
 
 # --- GitHub Abstract Extractor ---
 class GitHubRecordExtractor:
@@ -98,7 +48,7 @@ class GitHubRecordExtractor:
         self.num_processes: int = num_processes
         self.use_parallel_zstd = use_parallel_zstd and HAS_ZSTD_READER
     
-    async def extract_records_to_file(self, input_path: str, output_path: str) -> Dict[str, int]:
+    async def extract_records_to_file(self, input_path: str, output_path: str) -> ProcessingStats:
         """
         Extract GitHub records and save to JSONL file
         
@@ -145,14 +95,19 @@ class GitHubRecordExtractor:
         logger.info(f"Processing complete: {self.processed_count} processed, "
                    f"{self.valid_count} valid, {self.invalid_count} invalid")
         
-        return {
-            "processed": self.processed_count,
-            "valid": self.valid_count,
-            "invalid": self.invalid_count,
-            "output_size_mb": current_size // 1024 // 1024
-        }
+        return ProcessingStats(
+            processed=self.processed_count,
+            valid=self.valid_count,
+            invalid=self.invalid_count,
+            output_size_mb=current_size // 1024 // 1024
+        )
     
-    async def extract_records_to_memory(self, input_path: str, max_size: Optional[int] = None) -> List[GitHubRecord]:
+    
+    async def extract_records_to_memory(
+            self, 
+            input_path: str, 
+            max_size: Optional[int] = None
+    ) -> List[GitHubRecord]:
         """
         Extract GitHub records and return as list of Pydantic objects
         
@@ -242,7 +197,12 @@ class GitHubRecordExtractor:
         
         return records
     
-    async def _process_zstd_with_parallel_reader(self, input_path: str, output_path: str, num_processes: int = 1) -> Dict[str, int]:
+    async def _process_zstd_with_parallel_reader(
+            self, 
+            input_path: str, 
+            output_path: str, 
+            num_processes: int = 1
+    ) -> ProcessingStats:
         """Process .jsonl.zst files using ParallelZstdJsonlReader"""
         current_size = 0
         # Use ParallelZstdJsonlReader for efficient processing
@@ -293,14 +253,18 @@ class GitHubRecordExtractor:
                     f"total size: {current_size/1024/1024:.2f}MB")
         
         
-        return {
-            "processed": self.processed_count,
-            "valid": self.valid_count,
-            "invalid": self.invalid_count,
-            "output_size_mb": current_size // 1024 // 1024
-        }
+        return ProcessingStats(
+            processed = self.processed_count,
+            valid = self.valid_count,
+            invalid = self.invalid_count,
+            output_size_mb = current_size // 1024 // 1024
+        )
     
-    async def _process_zstd_to_memory_with_parallel_reader(self, input_path: str, max_size: int) -> List[GitHubRecord]:
+    async def _process_zstd_to_memory_with_parallel_reader(
+            self, 
+            input_path: str, 
+            max_size: int
+    ) -> List[GitHubRecord]:
         """Process .jsonl.zst files to memory using ParallelZstdJsonlReader"""
         current_size = 0
         records = []

@@ -7,8 +7,7 @@ import os
 from typing import List, Optional, Dict, Any, Pattern
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from datetime import datetime
+from .configs import ProcessingStats, PubMedAbstract, SourceFormat
 import hashlib
 from enum import Enum
 from utils.pipeline_logger import get_pipeline_logger
@@ -23,50 +22,7 @@ except ImportError:
     HAS_ZSTD_READER = False
     logger.warning("ParallelZstdJsonlReader not available. Falling back to standard processing.")
 
-# --- Pydantic V2 Models ---
-class SourceFormat(str, Enum):
-    TEXT = "text"
-    JSONL = "jsonl"
-    UNKNOWN = "unknown"
 
-class PubMedAbstract(BaseModel):
-    """Pydantic V2 model for PubMed abstracts"""
-    model_config = ConfigDict(
-        json_encoders={datetime: lambda v: v.isoformat()},
-        frozen=False,
-        extra='forbid'
-    )
-    
-    id: str = Field(..., description="Unique identifier for the abstract", min_length=1)
-    abstract_text: str = Field(..., description="The abstract content", min_length=10)
-    source: str = Field(default="pile-uncopyrighted", description="Source dataset")
-    extracted_at: datetime = Field(default_factory=datetime.now, description="Extraction timestamp")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
-    source_format: SourceFormat = Field(default=SourceFormat.UNKNOWN, description="Format of source data")
-    
-    @field_validator('abstract_text')
-    @classmethod
-    def validate_abstract_text(cls, v: str) -> str:
-        """Validate and clean abstract text"""
-        if not v or len(v.strip()) == 0:
-            raise ValueError("Abstract text cannot be empty")
-        
-        # Clean the text
-        v = re.sub(r'\s+', ' ', v).strip()
-        
-        if len(v) < 10:
-            raise ValueError("Abstract text is too short")
-            
-        return v
-    
-    @field_validator('id')
-    @classmethod
-    def validate_id(cls, v: str) -> str:
-        """Validate ID format"""
-        v = v.strip()
-        if not v:
-            raise ValueError("ID cannot be empty")
-        return v
 
 # --- PubMed Abstract Extractor ---
 class PubMedAbstractExtractor:
@@ -88,7 +44,10 @@ class PubMedAbstractExtractor:
         self.num_processes: int = num_processes
         self.use_parallel_zstd = use_parallel_zstd and HAS_ZSTD_READER
     
-    async def extract_abstracts_to_file(self, input_path: str, output_path: str) -> Dict[str, int]:
+    async def extract_abstracts_to_file(
+            self, input_path: str, 
+            output_path: str
+    ) -> ProcessingStats:
         """
         Extract PubMed abstracts and save to JSONL file
         
@@ -135,14 +94,18 @@ class PubMedAbstractExtractor:
         logger.info(f"Processing complete: {self.processed_count} processed, "
                    f"{self.valid_count} valid, {self.invalid_count} invalid")
         
-        return {
-            "processed": self.processed_count,
-            "valid": self.valid_count,
-            "invalid": self.invalid_count,
-            "output_size_mb": current_size // 1024 // 1024
-        }
+        return ProcessingStats(
+            processed= self.processed_count,
+            valid= self.valid_count,
+            invalid= self.invalid_count,
+            output_size_mb= os.path.getsize(output_path) // 1024 // 1024
+        )
     
-    async def extract_abstracts_to_memory(self, input_path: str, max_size: Optional[int] = None) -> List[PubMedAbstract]:
+    async def extract_abstracts_to_memory(
+            self, 
+            input_path: str, 
+            max_size: Optional[int] = None
+    ) -> List[PubMedAbstract]:
         """
         Extract PubMed abstracts and return as list of Pydantic objects
         
@@ -232,7 +195,12 @@ class PubMedAbstractExtractor:
         
         return abstracts
     
-    async def _process_zstd_with_parallel_reader(self, input_path: str, output_path: str, num_processes: int = 1) -> Dict[str, int]:
+    async def _process_zstd_with_parallel_reader(
+            self, 
+            input_path: str, 
+            output_path: str, 
+            num_processes: int = 1
+    ) -> ProcessingStats:
         """Process .jsonl.zst files using ParallelZstdJsonlReader"""
         current_size = 0
         # Use ParallelZstdJsonlReader for efficient processing
@@ -283,14 +251,18 @@ class PubMedAbstractExtractor:
                     f"total size: {current_size/1024/1024:.2f}MB")
         
         
-        return {
-            "processed": self.processed_count,
-            "valid": self.valid_count,
-            "invalid": self.invalid_count,
-            "output_size_mb": current_size // 1024 // 1024
-        }
+        return ProcessingStats(
+            processed= self.processed_count,
+            valid= self.valid_count,
+            invalid= self.invalid_count,
+            output_size_mb= os.path.getsize(output_path) // 1024 // 1024
+        )
     
-    async def _process_zstd_to_memory_with_parallel_reader(self, input_path: str, max_size: int) -> List[PubMedAbstract]:
+    async def _process_zstd_to_memory_with_parallel_reader(
+            self, 
+            input_path: str, 
+            max_size: int
+    ) -> List[PubMedAbstract]:
         """Process .jsonl.zst files to memory using ParallelZstdJsonlReader"""
         current_size = 0
         abstracts = []

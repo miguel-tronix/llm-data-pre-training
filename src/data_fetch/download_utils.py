@@ -1,7 +1,9 @@
 import asyncio
 import aiohttp
 import aiofiles
+import datetime
 import aiofiles.os
+import gzip
 import json
 import logging
 from pathlib import Path
@@ -109,6 +111,7 @@ class DownloadResult(BaseModel):
         if len(self.downloaded_files) != self.success_count:
             raise ValueError("Number of downloaded files must equal success_count")
         return self
+
 
 # --- Hugging Face Dataset Downloader ---
 class HFDatasetDownloader:
