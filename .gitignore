@@ -60,4 +60,5 @@ traindata/
 *.sh
 *.csv
 logs/
+pretraining_pipeline.log
 *.log

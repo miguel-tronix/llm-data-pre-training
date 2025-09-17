@@ -12,7 +12,7 @@ class PipelineLogger:
             
             if not cls._logger.handlers:
                 file_handler = logging.FileHandler(os.getenv("LOG_FILE", "logs/pretraining_pipeline.log"))
-                file_handler.setLevel(logging.DEBUG)
+                file_handler.setLevel(os.getenv("LOG_LEVEL", "INFO"))
                 
                 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
                 file_handler.setFormatter(formatter)

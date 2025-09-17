@@ -628,7 +628,10 @@ if __name__ == "__main__":
     PARALLEL_EXECS = int(f"{os.getenv('NUM_PROCESSES',PARALLEL_EXECS)}")
     BPE_CORPUS_FILE = f"{os.getenv('BPE_CORPUS_FILE',BPE_CORPUS_FILE)}"
     LOG_FILE = os.getenv("LOG_FILE","logs/pretraining_pipeline.log")
-    LOG_LEVEL = os.getenv("LOG_LEVEL","DEBUG")
+    LOG_LEVEL = os.getenv("LOG_LEVEL","INFO")
     LOG_FORMATTER = os.getenv("LOG_FORMATTER","%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logger.setLevel(LOG_LEVEL)
+    for handler in logger.handlers:
+        handler.setLevel(LOG_LEVEL)
     asyncio.run(main())
     
