@@ -21,6 +21,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "tokenizers>=0.22.0",
     "typer>=0.17.4",
+    "datasets>=4.1.0",
 ]
 
 [project.optional-dependencies]
