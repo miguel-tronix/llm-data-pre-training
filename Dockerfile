@@ -12,7 +12,8 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Clone your project
-RUN git clone https://github.com/miguel-tronix/llm-data-pretraining /opt/llm-data-pretraining
+RUN git clone https://github.com/miguel-tronix/llm-data-pre-training.git /opt/llm-data-pretraining
+
 
 # Set working directory and sync dependencies
 WORKDIR /opt/llm-data-pretraining
