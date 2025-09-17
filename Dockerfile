@@ -14,18 +14,19 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # Clone your project
 RUN git clone https://github.com/miguel-tronix/llm-data-pre-training.git /opt/llm-data-pretraining
 
-
-# Set working directory and sync dependencies
+# Set working directory and create a virtual environment
 WORKDIR /opt/llm-data-pretraining
+RUN uv venv
 RUN uv sync --frozen
 
 # Runtime stage
 FROM python:3.10-slim-bullseye
 
-# Copy only the necessary files from the builder stage
-COPY --from=builder /opt/llm-data-pretraining /opt/llm-data-pretraining
-COPY --from=builder /root/.cache/uv /root/.cache/uv
-
-# Set working directory and entrypoint
+# Set the working directory
 WORKDIR /opt/llm-data-pretraining
-ENTRYPOINT ["uv", "run", "src/main.py"]
+
+# Copy the project with the virtual environment from the builder stage
+COPY --from=builder /opt/llm-data-pretraining /opt/llm-data-pretraining
+
+# Set the entrypoint to use the Python interpreter from the virtual environment
+ENTRYPOINT ["/opt/llm-data-pretraining/.venv/bin/python", "src/main.py"]
