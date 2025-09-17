@@ -62,3 +62,4 @@ traindata/
 logs/
 pretraining_pipeline.log
 *.log
+logs/pretraining_pipeline.log
