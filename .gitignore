@@ -53,12 +53,11 @@ rawdata/
 precleandata/
 cleandata/
 traindata/
-logs/
 *.parquet
 *.zst
 *.jsonl
 *.txt
 *.sh
 *.csv
+logs/
 *.log
-logs/pretraining_pipeline.log
