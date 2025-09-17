@@ -9,8 +9,10 @@ RUN apt-get update && apt-get install -y \
 
 # Install uv
 #RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && mv /root/.cargo/bin/uv /usr/local/bin/uv
-ENV PATH="/root/.cargo/bin:${PATH}"
+RUN curl -LsSf https://astral.sh/uv/install.sh -o install.sh
+RUN sh install.sh 
+RUN mv /root/.local/bin/uv /usr/local/bin/uv
+#ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Clone your project
 RUN git clone https://github.com/miguel-tronix/llm-data-pre-training.git /opt/llm-data-pretraining
@@ -18,6 +20,7 @@ RUN git clone https://github.com/miguel-tronix/llm-data-pre-training.git /opt/ll
 # Set working directory and create a virtual environment
 WORKDIR /opt/llm-data-pretraining
 RUN uv venv
+RUN uv lock
 RUN uv sync --frozen
 
 # Runtime stage
