@@ -18,7 +18,7 @@ from data_clean.clean_and_tokenize import DeduplicationMethod,\
     PIIDetectionConfig, JsonlDataCleanPipeline, PipelineResult, PipelineType
 from data_train.tokenization import TokenizationResult, TokenizerConfig, BPETokenizer
 ENV_FILE_PATH = ".env"
-BASEDATA_PATH = "/opt/llm-data-pre-training"
+BASEDATA_PATH = "/opt/llm-data-pretraining"
 DATASET_URL = "https://h"
 RAWDATA_PATH = f"{BASEDATA_PATH}/rawdata"
 PRECLEANDATA_PATH = f"{BASEDATA_PATH}/precleandata"
