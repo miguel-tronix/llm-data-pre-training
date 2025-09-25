@@ -492,8 +492,8 @@ async def main():
         max_retries=10,                   # More retries for large files
         timeout=120,                     # Longer timeout for large files
         chunk_size=32768,                 # Larger chunk size for faster downloads
-         max_files=1,
-         num_parallel_downloads=PARALLEL_EXECS # Use 8 parallel threads for the download
+        max_files=1,
+        num_parallel_downloads=PARALLEL_EXECS # Use 8 parallel threads for the download
      )
 
 #    download_result = await download_pile_uncopyrighted(
@@ -611,7 +611,7 @@ async def main():
                 logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
     
 if __name__ == "__main__":
-    setenvs(ENV_FILE_PATH)
+    setenvs(f"{ENV_FILE_PATH}")
     BASEDATA_PATH = os.getenv("BASEDATA_PATH",BASEDATA_PATH)
     RAWDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('RAWDATA_PATH',RAWDATA_PATH)}"
     PRECLEANDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('PRECLEANDATA_PATH',PRECLEANDATA_PATH)}"

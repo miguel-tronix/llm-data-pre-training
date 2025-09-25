@@ -62,3 +62,8 @@ traindata/
 logs/
 pretraining_pipeline.log
 *.log
+
+# Document
+*.pdf
+*.docx
+*.odt

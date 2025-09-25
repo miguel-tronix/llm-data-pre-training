@@ -31,7 +31,7 @@ A high-performance pipeline for processing HuggingFace Uncopyrighted Pile record
    --memory=4g \
    --cpus=4 \
    -v $(pwd)/rawdata:/opt/llm-data-pretraining/rawdata \
-   -v $(pwd)/preclean:/opt/llm-data-pretraining/precleandata \
+   -v $(pwd)/precleandata:/opt/llm-data-pretraining/precleandata \
    -v $(pwd)/cleandata:/opt/llm-data-pretraining/cleandata \
    -v $(pwd)/traindata:/opt/llm-data-pretraining/traindata \
    -v $(pwd)/logs:/opt/llm-data-pretraining/logs \
