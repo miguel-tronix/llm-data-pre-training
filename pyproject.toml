@@ -33,9 +33,7 @@ dev = [
 
 [dependency-groups]
 dev = [
-  { include-group = "docs" },
   { include-group = "lint" },
-  { include-group = "tests" },
 ]
 
 lint = [
