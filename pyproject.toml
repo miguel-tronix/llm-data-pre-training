@@ -31,6 +31,18 @@ dev = [
     "pre-commit>=3.5.0",
 ]
 
+[dependency-groups]
+dev = [
+  { include-group = "docs" },
+  { include-group = "lint" },
+  { include-group = "tests" },
+]
+
+lint = [
+  "pre-commit==4.3.0",
+  "pre-commit-uv==4.1.4",
+]
+
 [tool.ruff]
 # Enable pycodestyle (E), pyflakes (F), and mccabe (C) codes by default
 select = ["E", "F", "C", "B", "I", "UP", "PL", "RUF"]
