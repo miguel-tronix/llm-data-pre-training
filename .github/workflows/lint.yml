@@ -2,7 +2,7 @@ name: Lint
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
   workflow_dispatch:
 
@@ -18,7 +18,7 @@ jobs:
       - name: Install the latest version of uv and set the python version to 3.10
         uses: astral-sh/setup-uv@v6
         with:
-          python-version: 3.10
+          python-version: 3.10.12
           activate-environment: true
 
       - name: Install pre-commit
