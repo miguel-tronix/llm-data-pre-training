@@ -25,13 +25,14 @@ def _download_chunk_process(
     max_retries: int,
     timeout: int,
     part_path: Path,
-    start_byte: int,
-    end_byte: int,
+    **kwargs,
 ) -> bool:
     """
     Worker function to download a file chunk in a separate process.
     Uses synchronous `requests` for simplicity within the process.
     """
+    start_byte = kwargs.get("start_byte", 0)
+    end_byte = kwargs.get("end_byte", 0)
     for attempt in range(max_retries):
         try:
             start_offset = 0
@@ -62,7 +63,8 @@ def _download_chunk_process(
 
         except requests.exceptions.RequestException as e:
             logger.warning(
-                f"Error downloading chunk {part_path.name} (attempt {attempt + 1}/{max_retries}): {e}"
+                f"Error downloading chunk {part_path.name} \
+                (attempt {attempt + 1}/{max_retries}): {e}"
             )
             if attempt < max_retries - 1:
                 time.sleep(2**attempt)
@@ -229,7 +231,8 @@ class HFDatasetDownloader:
         file_size = file_info.size if file_info.size else 0
         if file_size < self.MB_100:
             logger.warning(
-                f"File {file_info.path} is smaller than 100MB, skipping parallel download."
+                f"File {file_info.path} is smaller than 100MB, \
+                skipping parallel download."
             )
             return await self._download_file_single_stream(file_info)
 
@@ -239,7 +242,7 @@ class HFDatasetDownloader:
         part_size = even_split_size - thread_over_size
 
         current_pos = 0
-        for i in range(num_parts - 1):
+        for _i in range(num_parts - 1):
             ranges.append((current_pos, current_pos + part_size - 1))
             current_pos += part_size
         ranges.append((current_pos, file_size - 1))
@@ -260,9 +263,9 @@ class HFDatasetDownloader:
                 loop.run_in_executor(
                     executor,
                     worker_func,
-                    local_path.with_name(f"{local_path.name}.part{i}"),  # part_path
-                    start,  # start_byte
-                    end,  # end_byte
+                    local_path.with_name(f"{local_path.name}.part{i}"),
+                    start,
+                    end,
                 )
                 for i, (start, end) in enumerate(ranges)
             ]
@@ -317,7 +320,9 @@ class HFDatasetDownloader:
                         return True
                     else:
                         logger.warning(
-                            f"Failed download {file_info.path}, status {response.status}, attempt {attempt + 1}"
+                            f"Failed download {file_info.path}, \
+                            status {response.status}, \
+                            attempt {attempt + 1}"
                         )
             except Exception as e:
                 logger.warning(
@@ -328,7 +333,8 @@ class HFDatasetDownloader:
                 await asyncio.sleep(2**attempt)
 
         logger.error(
-            f"Failed to download {file_info.path} after {self.config.max_retries} attempts"
+            f"Failed to download {file_info.path} after \
+            {self.config.max_retries} attempts"
         )
         return False
 
@@ -348,7 +354,8 @@ class HFDatasetDownloader:
             and self.config.num_parallel_downloads > 1
         ):
             logger.info(
-                f"Using parallel download for {file_info.path} ({self.config.num_parallel_downloads} processes)"
+                f"Using parallel download for {file_info.path} \
+                ({self.config.num_parallel_downloads} processes)"
             )
             return await self.download_file_parallel(file_info)
         else:
