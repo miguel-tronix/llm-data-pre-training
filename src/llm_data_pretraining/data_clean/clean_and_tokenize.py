@@ -1,15 +1,18 @@
-import os
-import jsonlines
-from pathlib import Path
-from typing import Iterator, Dict, Any, Tuple, Optional, Set
-from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-import re
 import hashlib
-from tqdm import tqdm
-from enum import Enum
+import os
+import re
+from collections.abc import Iterator
 from contextlib import contextmanager
+from enum import Enum
+from pathlib import Path
+from typing import Any
+
+import jsonlines
 from data_prep.fast_zst_reader import ParallelZstdJsonlReader
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from tqdm import tqdm
 from utils.pipeline_logger import get_pipeline_logger
+
 # Configure logging
 logger = get_pipeline_logger()
 
@@ -68,7 +71,7 @@ class ProcessedRecord(BaseModel):
     id: str = Field(..., description="Unique identifier")
     text: str = Field(..., description="Cleaned abstract text", min_length=1)
     source: str = Field(default="pubmed", description="Data source format")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Processing metadata")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Processing metadata")
 #    extracted_at: Optional[str] = Field(None,description="Abstract extracted date")
 #    title: Optional[str] = Field(None, description="Article title")
 #    journal: Optional[str] = Field(None, description="Journal name")
@@ -95,8 +98,8 @@ class PipelineResult(BaseModel):
     duplicates_removed: int = Field(0, ge=0, description="Number of duplicates removed")
     pii_records_removed: int = Field(0, ge=0, description="Number of records removed due to PII")
     short_records_removed: int = Field(0, ge=0, description="Number of records removed due to short length")
-    final_file: Optional[Path] = Field(None, description="Path to final output file")
-    processing_time: Optional[float] = Field(None, description="Processing time in seconds")
+    final_file: Path | None = Field(None, description="Path to final output file")
+    processing_time: float | None = Field(None, description="Processing time in seconds")
     
     @model_validator(mode='after')
     def validate_counts(self) -> 'PipelineResult':
@@ -113,7 +116,7 @@ class PipelineResult(BaseModel):
 class ParallelZstdReaderConfig(BaseModel):
     """Configuration for parallel Zstd reader"""
     file_path: Path = Field(..., description="Path to Zstandard compressed file")
-    num_processes: Optional[int] = Field(None, ge=1, description="Number of processes to use")
+    num_processes: int | None = Field(None, ge=1, description="Number of processes to use")
     chunk_size: int = Field(default=1024 * 1024, ge=1024, le=10 * 1024 * 1024, description="Chunk size in bytes")
     
     @field_validator('file_path')
@@ -138,7 +141,7 @@ class JsonlDataCleanPipeline:
         # Compile PII patterns based on configuration
         self.pii_patterns = self._compile_pii_patterns()
     
-    def _compile_pii_patterns(self) -> Dict[str, re.Pattern]:
+    def _compile_pii_patterns(self) -> dict[str, re.Pattern]:
         """Compile PII detection patterns based on configuration"""
         patterns = {}
         
@@ -160,7 +163,7 @@ class JsonlDataCleanPipeline:
         return patterns
     
     @contextmanager
-    def read_jsonl_file(self) -> Iterator[Iterator[Dict[str, Any]]]:
+    def read_jsonl_file(self) -> Iterator[Iterator[dict[str, Any]]]:
         """Context manager for reading JSONL files"""
         if self.config.input_path.suffix == '.zst':
             reader = ParallelZstdJsonlReader(
@@ -201,7 +204,7 @@ class JsonlDataCleanPipeline:
         """Generate hash for content deduplication"""
         return hashlib.md5(text.encode('utf-8')).hexdigest()
     
-    def process_record(self, record: Dict[str, Any]) -> Optional[ProcessedRecord]:
+    def process_record(self, record: dict[str, Any]) -> ProcessedRecord | None:
         """Process a single PipelineType abstract record using Pydantic model"""
         
         # Extract abstract text
@@ -234,7 +237,14 @@ class JsonlDataCleanPipeline:
             processed_data = {
                 'id': record.get('id', ''),
                 'text': cleaned_text,
-                'source': record.get('source', self.config.pipeline_type.value  if isinstance(self.config.pipeline_type, PipelineType) else 'pubmed'),
+                'source': record.get(
+                    'source', 
+                    self.config.pipeline_type.value  if isinstance
+                    (
+                        self.config.pipeline_type,
+                        PipelineType
+                    ) else 'pubmed'
+                ),
                 'metadata': {
                     'original_length': len(record_text),
                     'cleaned_length': len(cleaned_text),
@@ -253,9 +263,9 @@ class JsonlDataCleanPipeline:
             logger.warning(f"Failed to create processed record: {e}")
             return None
     
-    def run_deduplication(self, input_file: Path, output_file: Path) -> Tuple[int, int, int]:
+    def run_deduplication(self, input_file: Path, output_file: Path) -> tuple[int, int, int]:
         """Remove duplicate abstracts using Pydantic models"""
-        seen_hashes: Set[str] = set()
+        seen_hashes: set[str] = set()
         duplicates_removed = 0
         total_records = 0
         
