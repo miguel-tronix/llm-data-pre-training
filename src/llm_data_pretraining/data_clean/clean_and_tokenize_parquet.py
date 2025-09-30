@@ -1,17 +1,13 @@
+import hashlib
+import json
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import pandas as pd
-import numpy as np
-import json
-from pathlib import Path
-from typing import Iterator, Dict, Any, List, Optional
-import logging
-import re
-import hashlib
-from dataclasses import dataclass
-from tqdm import tqdm
 from datasets import Dataset
-import torch
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
@@ -148,7 +144,7 @@ class ParquetPubMedProcessor:
         if isinstance(parquet_dataset, Dataset):
             return parquet_dataset
         else:
-            raise Exception(f"Could not create parquet huggingface dataset")
+            raise Exception("Could not create parquet huggingface dataset")
 
     def prepare_for_tokenization(
         self, dataset: Dataset, tokenizer_name: str = "bert-base-uncased"
@@ -224,7 +220,7 @@ def benchmark_formats():
 
     # Time JSONL reading
     start = time.time()
-    with open(test_file, "r") as f:
+    with open(test_file) as f:
         for line in f:
             json.loads(line)
     jsonl_time = time.time() - start
