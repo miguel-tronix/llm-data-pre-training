@@ -13,6 +13,8 @@ from utils.pipeline_logger import get_pipeline_logger
 
 # Configure logging
 logger = get_pipeline_logger()
+MIN_SIZE_BYTES = 1024
+
 # Try to import ParallelZstdJsonlReader
 try:
     from data_prep.fast_zst_reader import process_large_zstd_file_parallel as zstreader
@@ -158,7 +160,8 @@ class WebRecordExtractor:
                                     source_format=SourceFormat.JSONL,
                                 )
 
-                                # Use model_dump_json() - Pydantic V2 handles Unicode properly
+                                # Use model_dump_json() 
+                                # Pydantic V2 handles Unicode properly
                                 json_size = len(
                                     Web_records.model_dump_json().encode("utf-8")
                                 )
@@ -219,10 +222,13 @@ class WebRecordExtractor:
         # Use ParallelZstdJsonlReader for efficient processing
         if zstreader is None:
             raise RuntimeError(
-                "ParallelZstdJsonlReader is not available. Cannot process .jsonl.zst files."
+                "ParallelZstdJsonlReader is not available. \
+                Cannot process .jsonl.zst files."
             )
         for data in zstreader(file_path=Path(input_path), num_processes=num_processes):
-            # logger.debug(f"reading {data} from zst file - current output size is {current_size // 1024 // 1024}")
+            # logger.debug(f"reading {data} from zst file -\
+            # current output size is \
+            # {current_size // MIN_SIZE_BYTES // MIN_SIZE_BYTES}")
             if current_size >= self.target_size:
                 break
             self.processed_count += 1
@@ -258,7 +264,8 @@ class WebRecordExtractor:
                                     self.valid_count += 1
                             except Exception as e:
                                 logger.error(
-                                    f"Error processing file with ParallelZstdJsonlReader: {e}"
+                                    f"Error processing file with \
+                                    ParallelZstdJsonlReader: {e}"
                                 )
                                 raise
 
@@ -306,7 +313,6 @@ class WebRecordExtractor:
             streaming=True,
         )
 
-        target_size_bytes = self.target_size * 1024 * 1024
         current_size = 0
         record_count = 0
 
@@ -318,7 +324,9 @@ class WebRecordExtractor:
                 break
             data = json.loads(line) if isinstance(line, str) else line
             logger.debug(
-                f"reading {data} from dataset stream - current output size is {current_size // 1024 // 1024}"
+                f"reading {data} from dataset stream - \
+                current output size is \
+                {current_size // MIN_SIZE_BYTES // MIN_SIZE_BYTES} MB"
             )
             try:
                 if isinstance(data, dict) and self._is_WebRecord_entry(data):
@@ -351,7 +359,8 @@ class WebRecordExtractor:
                                     self.valid_count += 1
                             except Exception as e:
                                 logger.error(
-                                    f"Error processing file with ParallelZstdJsonlReader: {e}"
+                                    f"Error processing file with \
+                                    ParallelZstdJsonlReader: {e}"
                                 )
                                 raise
 
@@ -388,7 +397,8 @@ class WebRecordExtractor:
             # Use ParallelZstdJsonlReader for efficient processing
             if zstreader is None:
                 raise RuntimeError(
-                    "ParallelZstdJsonlReader is not available. Cannot process .jsonl.zst files."
+                    "ParallelZstdJsonlReader is not available. \
+                    Cannot process .jsonl.zst files."
                 )
             for data in zstreader(file_path=Path(input_path), num_processes=4):
                 # logger.debug(f"read {data} from zst")
@@ -408,7 +418,8 @@ class WebRecordExtractor:
                                 source_format=SourceFormat.JSONL,
                             )
 
-                            # Use model_dump_json() - Pydantic V2 handles Unicode properly
+                            # Use model_dump_json() 
+                            # Pydantic V2 handles Unicode properly
                             json_size = len(
                                 Web_records.model_dump_json().encode("utf-8")
                             )
@@ -504,7 +515,8 @@ class WebRecordExtractor:
                             source_format=SourceFormat.JSONL,
                         )
 
-                        # Pydantic V2's model_dump_json() handles Unicode properly by default
+                        # Pydantic V2's model_dump_json() 
+                        # handles Unicode properly by default
                         json_line = Web_records.model_dump_json() + "\n"
                         line_size = len(json_line.encode("utf-8"))
 
