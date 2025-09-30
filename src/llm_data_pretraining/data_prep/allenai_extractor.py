@@ -7,7 +7,7 @@ from datasets import load_dataset, DownloadConfig
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Pattern
 from pathlib import Path
-from .configs import ProcessingStats, WebRecord, SourceFormat
+from data_prep.configs import ProcessingStats, WebRecord, SourceFormat
 import hashlib
 from utils.pipeline_logger import get_pipeline_logger
 
@@ -15,10 +15,11 @@ from utils.pipeline_logger import get_pipeline_logger
 logger = get_pipeline_logger()
 # Try to import ParallelZstdJsonlReader
 try:
-    from .fast_zst_reader import ParallelZstdJsonlReader, process_large_zstd_file_parallel as zstreader
+    from data_prep.fast_zst_reader import process_large_zstd_file_parallel as zstreader
     HAS_ZSTD_READER = True
 except ImportError:
     HAS_ZSTD_READER = False
+    zstreader = None
     logger.warning("ParallelZstdJsonlReader not available. Falling back to standard processing.")
 
 # --- Wikipedia Abstract Extractor ---
@@ -143,7 +144,7 @@ class WebRecordExtractor:
                     try:
                         data = json.loads(line)
                         
-                        if self._is_WebRecord_entry(data):
+                        if isinstance(data, dict) and self._is_WebRecord_entry(data):
                             abstract = self._extract_articles_from_json(data)
                             if abstract:
                                 entry_id = data.get('id', self._generate_id(data))
@@ -151,6 +152,8 @@ class WebRecordExtractor:
                                 Web_records = WebRecord(
                                     id=entry_id,
                                     web_text=abstract,
+                                    timestamp=data.get("timestamp", ""),
+                                    url=data.get("url", ""),
                                     metadata={"original_data_keys": list(data.keys())},
                                     source_format=SourceFormat.JSONL
                                 )
@@ -178,7 +181,9 @@ class WebRecordExtractor:
                     try:
                         Web_records = WebRecord(
                             id=wiki_id,
-                            article_text=abstract,
+                            web_text=abstract,
+                            timestamp=None,
+                            url="",
                             metadata={"wiki_id": wiki_id},
                             source_format=SourceFormat.TEXT
                         )
@@ -210,7 +215,11 @@ class WebRecordExtractor:
     ) -> ProcessingStats:
         """Process .jsonl.zst files using ParallelZstdJsonlReader"""
         current_size = 0
+        if not HAS_ZSTD_READER:
+            raise RuntimeError("ParallelZstdJsonlReader not available.")
         # Use ParallelZstdJsonlReader for efficient processing
+        if zstreader is None:
+            raise RuntimeError("ParallelZstdJsonlReader is not available. Cannot process .jsonl.zst files.")
         for data in zstreader(file_path=Path(input_path), num_processes=num_processes):
             #logger.debug(f"reading {data} from zst file - current output size is {current_size // 1024 // 1024}")
             if current_size >= self.target_size :
@@ -218,14 +227,16 @@ class WebRecordExtractor:
             self.processed_count += 1
             
             try:
-                if self._is_WebRecord_entry(data):
+                if isinstance(data, dict) and self._is_WebRecord_entry(data):
                     abstract = self._extract_articles_from_json(data)
                     if abstract:
                         entry_id = data.get('id', self._generate_id(data))
                         
                         Web_records = WebRecord(
                             id=entry_id,
-                            article_text=abstract,
+                            web_text=abstract,
+                            timestamp=data.get("timestamp", ""),
+                            url=data.get("url", ""),
                             metadata={"original_data_keys": list(data.keys())},
                             source_format=SourceFormat.JSONL
                         )
@@ -302,7 +313,7 @@ class WebRecordExtractor:
             data = json.loads(line) if isinstance(line, str) else line
             logger.debug(f"reading {data} from dataset stream - current output size is {current_size // 1024 // 1024}")
             try:
-                if self._is_WebRecord_entry(data):
+                if isinstance(data, dict) and self._is_WebRecord_entry(data):
                     abstract = self._extract_articles_from_json(data)
                     if abstract:
                         entry_id = data.get('id', self._generate_id(data))
@@ -362,6 +373,8 @@ class WebRecordExtractor:
         
         try:
             # Use ParallelZstdJsonlReader for efficient processing
+            if zstreader is None:
+                raise RuntimeError("ParallelZstdJsonlReader is not available. Cannot process .jsonl.zst files.")
             for data in zstreader(file_path=Path(input_path), num_processes=4):
                 #logger.debug(f"read {data} from zst")
                 self.processed_count += 1
@@ -373,7 +386,9 @@ class WebRecordExtractor:
                             
                             Web_records = WebRecord(
                                 id=entry_id,
-                                article_text=abstract,
+                                web_text=abstract,
+                                timestamp=data.get("timestamp", ""),
+                                url=data.get("url", ""),
                                 metadata={"original_data_keys": list(data.keys())},
                                 source_format=SourceFormat.JSONL
                             )
@@ -416,7 +431,9 @@ class WebRecordExtractor:
             try:
                 Web_records = WebRecord(
                     id=wiki_id,
-                    article_text=abstract,
+                    web_text=abstract,
+                    timestamp=None,
+                    url="",
                     metadata={"wikipediaid": wiki_id},
                     source_format=SourceFormat.TEXT
                 )
@@ -460,6 +477,8 @@ class WebRecordExtractor:
                         Web_records = WebRecord(
                             id=entry_id,
                             web_text=abstract,
+                            timestamp=data.get("timestamp", ""),
+                            url=data.get("url", ""),
                             metadata={"original_data_keys": list(data.keys())},
                             source_format=SourceFormat.JSONL
                         )

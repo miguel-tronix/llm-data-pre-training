@@ -7,7 +7,7 @@ import os
 from typing import List, Optional, Dict, Any, Pattern
 import logging
 from pathlib import Path
-from .configs import SourceFormat, ProcessingStats, GitHubRecord
+from data_prep.configs import SourceFormat, ProcessingStats, GitHubRecord
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime
 import hashlib
@@ -21,10 +21,11 @@ logger = get_pipeline_logger()
 #from src.main import logger
 # Try to import ParallelZstdJsonlReader
 try:
-    from .fast_zst_reader import ParallelZstdJsonlReader, process_large_zstd_file_parallel as zstreader
+    from data_prep.fast_zst_reader import process_large_zstd_file_parallel as zstreader
     HAS_ZSTD_READER = True
 except ImportError:
     HAS_ZSTD_READER = False
+    zstreader = None
     logger.warning("ParallelZstdJsonlReader not available. Falling back to standard processing.")
 
 
@@ -205,6 +206,8 @@ class GitHubRecordExtractor:
     ) -> ProcessingStats:
         """Process .jsonl.zst files using ParallelZstdJsonlReader"""
         current_size = 0
+        if not HAS_ZSTD_READER:
+            raise RuntimeError("ParallelZstdJsonlReader is not available. Cannot process .jsonl.zst files.")
         # Use ParallelZstdJsonlReader for efficient processing
         for data in zstreader(file_path=Path(input_path), num_processes=num_processes):
             #logger.debug(f"reading {data} from zst file - current output size is {current_size // 1024 // 1024}")
