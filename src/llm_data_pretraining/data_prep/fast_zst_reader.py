@@ -12,6 +12,7 @@ from utils.pipeline_logger import get_pipeline_logger
 
 # Configure logging
 logger = get_pipeline_logger()
+MAX_RESULTS_PER_CHUNK = 100000  # Limit results per chunk to avoid memory issues
 
 
 class ParallelZstdJsonlReader:
@@ -45,7 +46,8 @@ class ParallelZstdJsonlReader:
                 for start in range(0, file_size, self.chunk_size):
                     end = min(start + self.chunk_size, file_size)
 
-                    # If not at the end, find the next newline to avoid splitting JSON objects
+                    # If not at the end, find the next newline 
+                    # to avoid splitting JSON objects
                     if end < file_size:
                         # Look for a newline character near the end of the chunk
                         newline_pos = mm.find(
@@ -77,7 +79,7 @@ class ParallelZstdJsonlReader:
             with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                 # Extract the chunk
                 compressed_chunk = mm[start:end]
-                # logger.debug(f"size of bytes read from zst {len(compressed_chunk)}")
+                logger.debug(f"size of bytes read from zst {len(compressed_chunk)}")
                 # Decompress the chunk
                 try:
                     with dctx.stream_reader(f) as decompressed:
@@ -85,16 +87,18 @@ class ParallelZstdJsonlReader:
                         # Parse JSON lines
                         for line in text:
                             if line.strip():  # Skip empty lines
-                                # logger.debug(f"decompressed {line} from the stream chunk")
+                                logger.debug(f"decompressed \
+                                {line} from the stream chunk")
                                 try:
                                     data = json.loads(line)
                                     results.append(data)
                                 except json.JSONDecodeError:
                                     logger.warning(
-                                        f"Failed to parse JSON line in chunk: {line[:100]}..."
+                                        f"Failed to parse JSON line in chunk: \
+                                        {line[:100]}..."
                                     )
                                     continue
-                            if len(results) > 999:
+                            if len(results) > MAX_RESULTS_PER_CHUNK:
                                 break
                 except Exception as e:
                     logger.error(f"Error processing chunk {start}-{end}: {e}")
@@ -118,8 +122,7 @@ class ParallelZstdJsonlReader:
         with ProcessPoolExecutor(max_workers=self.num_processes) as executor:
             # Process each chunk and collect results
             for result in executor.map(self.process_chunk, chunks):
-                for item in result:
-                    yield item
+                yield from result
 
     def read_parallel_batches(
         self, batch_size: int = 1000
