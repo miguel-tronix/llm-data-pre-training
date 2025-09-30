@@ -8,6 +8,7 @@ from pathlib import Path
 
 import aiofiles
 import aiofiles.os
+import aiofiles.ospath
 import aiohttp
 import requests
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -287,7 +288,7 @@ class HFDatasetDownloader:
 
     async def _download_file_single_stream(self, file_info: FileInfo) -> bool:
         file_url = f"https://huggingface.co/datasets/{self.config.repo_id}/resolve/main/{file_info.path}"
-        local_path = self.config.raw_data_dir / file_info.path
+        local_path : Path = self.config.raw_data_dir / file_info.path
         if self.session is None:
             raise Exception("No session available")
         local_path.parent.mkdir(parents=True, exist_ok=True)
