@@ -2,8 +2,9 @@ import re
 from datetime import datetime
 from enum import Enum
 from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+
+MIN_ABSTRACT_LENGTH = 10  # Minimum length for abstract/code text validation
 
 
 class ProcessingStats(BaseModel):
@@ -100,7 +101,7 @@ class GitHubRecord(BaseModel):
         # Clean the text
         v = re.sub(r"\s+", " ", v).strip()
 
-        if len(v) < 10:
+        if len(v) < MIN_ABSTRACT_LENGTH:
             raise ValueError("Abstract text is too short")
 
         return v
