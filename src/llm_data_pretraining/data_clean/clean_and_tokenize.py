@@ -1,6 +1,7 @@
 import hashlib
 import os
 import re
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from enum import Enum
@@ -12,6 +13,8 @@ from data_prep.fast_zst_reader import ParallelZstdJsonlReader
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tqdm import tqdm
 from utils.pipeline_logger import get_pipeline_logger
+
+MIN_SIZE_BYTES = 1024  # Define a default minimum size in bytes
 
 # Configure logging
 logger = get_pipeline_logger()
@@ -154,7 +157,10 @@ class PipelineResult(BaseModel):
 
         if self.output_records != expected_output:
             raise ValueError(
-                f"Output records count mismatch: expected {expected_output}, got {self.output_records}"
+                f"Output records count mismatch: \
+                expected {expected_output}, \
+                got {self.output_records} \
+                "
             )
 
         return self
@@ -249,7 +255,12 @@ class JsonlDataCleanPipeline:
         except Exception:
             # Fallback to manual cleaning if validation fails
             text = re.sub(r"\s+", " ", text.strip())
-            # text = re.sub(r'^\s*(ABSTRACT|ABSTRAKT|RESUMEN)\s*[:-\s]*', '', text, flags=re.IGNORECASE)
+            # text = re.sub(
+            # r'^\s*(ABSTRACT|ABSTRAKT|RESUMEN)\s*[:-\s]*', 
+            # '', 
+            # text, 
+            # flags=re.IGNORECASE
+            #)
             text = re.sub(r"\[.*?\]", "", text)
             text = re.sub(r"\(.*?\)", "", text)
             return text.strip()
@@ -336,7 +347,7 @@ class JsonlDataCleanPipeline:
 
         with jsonlines.open(input_file, "r") as reader:
             with jsonlines.open(output_file, "w") as writer:
-                if os.stat(writer._fp.fileno()).st_size < 1024:
+                if os.stat(writer._fp.fileno()).st_size < MIN_SIZE_BYTES:
                     for record_data in tqdm(reader, desc="Deduplicating"):
                         total_records += 1
 
@@ -344,7 +355,8 @@ class JsonlDataCleanPipeline:
                             record = ProcessedRecord(**record_data)
                             content_hash = record.metadata.get("content_hash", "")
                             logger.debug(
-                                f"Processing record ID {record.id} with hash {content_hash}"
+                                f"Processing record ID {record.id} \
+                                with hash {content_hash}"
                             )
                             if content_hash and content_hash not in seen_hashes:
                                 seen_hashes.add(content_hash)
@@ -359,8 +371,6 @@ class JsonlDataCleanPipeline:
 
     def run_pipeline(self) -> PipelineResult:
         """Run the complete processing pipeline with Pydantic V2"""
-        import time
-
         start_time = time.time()
 
         logger.info(
@@ -385,7 +395,7 @@ class JsonlDataCleanPipeline:
             self.read_jsonl_file() as records,
             jsonlines.open(processed_file, "w") as writer,
         ):
-            if os.stat(writer._fp.fileno()).st_size < 1024:
+            if os.stat(writer._fp.fileno()).st_size < MIN_SIZE_BYTES:
                 for record in tqdm(records, desc="Processing abstracts"):
                     stats["input_records"] += 1
                     processed = self.process_record(record)
@@ -416,7 +426,7 @@ class JsonlDataCleanPipeline:
             self.output_dir
             / f"deduplicated_abstracts_{self.config.pipeline_type}.jsonl"
         )
-        unique_count, duplicates_removed, total_dedup = self.run_deduplication(
+        unique_count, duplicates_removed, _total_dedup = self.run_deduplication(
             processed_file, dedup_file
         )
 
@@ -444,7 +454,7 @@ class JsonlDataCleanPipeline:
         """Prepare the final dataset for tokenization using Pydantic"""
         with jsonlines.open(input_file, "r") as reader:
             with jsonlines.open(output_file, "w") as writer:
-                if os.stat(writer._fp.fileno()).st_size < 1024:
+                if os.stat(writer._fp.fileno()).st_size < MIN_SIZE_BYTES:
                     for record_data in tqdm(reader, desc="Preparing for tokenization"):
                         try:
                             record = ProcessedRecord(**record_data)
