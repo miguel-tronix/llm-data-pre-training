@@ -1,17 +1,17 @@
 import asyncio
-import aiohttp
+import functools
+import os
+import re
+import time
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+
 import aiofiles
 import aiofiles.os
-from pathlib import Path
-from typing import List, Optional, Tuple
-from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-from tqdm import tqdm
-import time
-import re
-import os
+import aiohttp
 import requests
-from concurrent.futures import ProcessPoolExecutor
-import functools
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from tqdm import tqdm
 from utils.pipeline_logger import get_pipeline_logger
 
 logger = get_pipeline_logger()
@@ -82,8 +82,8 @@ class FileInfo(BaseModel):
 
     path: str = Field(..., description="File path in the repository")
     type: str = Field(..., description="File type (file or directory)")
-    size: Optional[int] = Field(None, description="File size in bytes")
-    oid: Optional[str] = Field(None, description="Git object ID")
+    size: int | None = Field(None, description="File size in bytes")
+    oid: str | None = Field(None, description="Git object ID")
     model_config = ConfigDict(extra="ignore")
 
 
@@ -103,13 +103,13 @@ class DownloadConfig(BaseModel):
     timeout: int = Field(
         default=30, ge=5, le=300, description="Request timeout in seconds"
     )
-    file_pattern: Optional[str] = Field(
+    file_pattern: str | None = Field(
         default=None, description="Regex pattern to filter files"
     )
     chunk_size: int = Field(
         default=8192, ge=1024, le=65536, description="Chunk size for downloading"
     )
-    max_files: Optional[int] = Field(
+    max_files: int | None = Field(
         default=None, ge=1, description="Maximum number of files to download"
     )
     num_parallel_downloads: int = Field(
@@ -132,10 +132,10 @@ class DownloadResult(BaseModel):
     )
     failed_count: int = Field(0, ge=0, description="Number of failed downloads")
     download_dir: str = Field(..., description="Directory where files were downloaded")
-    downloaded_files: List[str] = Field(
+    downloaded_files: list[str] = Field(
         default_factory=list, description="List of successfully downloaded file paths"
     )
-    message: Optional[str] = Field(
+    message: str | None = Field(
         None, description="Additional message or error details"
     )
 
@@ -157,7 +157,7 @@ class HFDatasetDownloader:
 
     def __init__(self, config: DownloadConfig):
         self.config = config
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
         self.file_extensions = [".jsonl", ".jsonl.zst", ".jsonl.gz", ".txt", ".zst"]
 
     async def __aenter__(self):
@@ -170,7 +170,7 @@ class HFDatasetDownloader:
         if self.session:
             await self.session.close()
 
-    async def get_dataset_files(self) -> List[FileInfo]:
+    async def get_dataset_files(self) -> list[FileInfo]:
         api_url = (
             f"https://huggingface.co/api/datasets/{self.config.repo_id}/tree/main/train"
         )
@@ -238,7 +238,7 @@ class HFDatasetDownloader:
         if file_size == 0:
             return False
 
-        ranges: List[Tuple[int, int]] = []
+        ranges: list[tuple[int, int]] = []
         even_split_size = file_size // num_parts
         thread_over_size = even_split_size % self.MB_100
         part_size = even_split_size - thread_over_size
