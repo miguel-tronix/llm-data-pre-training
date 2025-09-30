@@ -13,6 +13,8 @@ from .configs import ProcessingStats, SourceFormat, WikiArticle
 
 # Configure logging
 logger = get_pipeline_logger()
+MIN_SIZE_BYTES = 1024
+
 # Try to import ParallelZstdJsonlReader
 try:
     from data_prep.fast_zst_reader import process_large_zstd_file_parallel as zstreader
@@ -150,7 +152,8 @@ class WikiArticleExtractor:
                                     source_format=SourceFormat.JSONL,
                                 )
 
-                                # Use model_dump_json() - Pydantic V2 handles Unicode properly
+                                # Use model_dump_json() 
+                                # Pydantic V2 handles Unicode properly
                                 json_size = len(
                                     Wiki_articles.model_dump_json().encode("utf-8")
                                 )
@@ -206,7 +209,9 @@ class WikiArticleExtractor:
         current_size = 0
         # Use ParallelZstdJsonlReader for efficient processing
         for data in zstreader(file_path=Path(input_path), num_processes=num_processes):
-            # logger.debug(f"reading {data} from zst file - current output size is {current_size // 1024 // 1024}")
+            # logger.debug(f"reading {data} from zst file - \
+            # current output size is \
+            # {current_size // MIN_SIZE_BYTES // MIN_SIZE_BYTES}MB")
             if current_size >= self.target_size:
                 break
             self.processed_count += 1
@@ -240,7 +245,8 @@ class WikiArticleExtractor:
                                     self.valid_count += 1
                             except Exception as e:
                                 logger.error(
-                                    f"Error processing file with ParallelZstdJsonlReader: {e}"
+                                    f"Error processing file with \
+                                    ParallelZstdJsonlReader: {e}"
                                 )
                                 raise
 
@@ -292,7 +298,8 @@ class WikiArticleExtractor:
                                 source_format=SourceFormat.JSONL,
                             )
 
-                            # Use model_dump_json() - Pydantic V2 handles Unicode properly
+                            # Use model_dump_json() 
+                            # Pydantic V2 handles Unicode properly
                             json_size = len(
                                 Wiki_articles.model_dump_json().encode("utf-8")
                             )
@@ -384,7 +391,8 @@ class WikiArticleExtractor:
                             source_format=SourceFormat.JSONL,
                         )
 
-                        # Pydantic V2's model_dump_json() handles Unicode properly by default
+                        # Pydantic V2's model_dump_json() 
+                        # handles Unicode properly by default
                         json_line = Wiki_articles.model_dump_json() + "\n"
                         line_size = len(json_line.encode("utf-8"))
 
