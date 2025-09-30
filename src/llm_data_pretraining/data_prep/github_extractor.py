@@ -137,18 +137,59 @@ class GitHubRecordExtractor:
         try:
             # Process based on file format
             if input_path.endswith(".jsonl") or input_path.endswith(".jsonl.gz"):
-                async for line in input_file:
-                    self.processed_count += 1
+                await self._read_jsonl(max_size, current_size, records, input_file)
+            else:
+                await self._read_text(max_size, current_size, records, input_file)
 
-                    try:
-                        data = json.loads(line)
+        finally:
+            await input_file.close()
 
-                        if self._is_GitHub_entry(data):
-                            abstract = self._extract_records_from_json(data)
-                            if abstract:
-                                entry_id = data.get("id", self._generate_id(data))
+        return records
 
-                                GitHub_records = GitHubRecord(
+    async def _read_text(self, max_size, current_size, records, input_file):
+        content = await input_file.read()
+        matches = self.GitHub_pattern.findall(content)
+
+        for github_id, abstract in matches:
+            self.processed_count += 1
+
+            try:
+                GitHub_records = GitHubRecord(
+                            id=github_id,
+                            code_text=abstract,
+                            metadata={"github_id": github_id},
+                            source_format=SourceFormat.TEXT,
+                        )
+
+                        # Use model_dump_json() - Pydantic V2 handles Unicode properly
+                json_size = len(
+                            GitHub_records.model_dump_json().encode("utf-8")
+                        )
+
+                if current_size + json_size > max_size:
+                    break
+
+                records.append(GitHub_records)
+                current_size += json_size
+                self.valid_count += 1
+
+            except Exception:
+                self.invalid_count += 1
+                continue
+
+    async def _read_jsonl(self, max_size, current_size, records, input_file):
+        for line in input_file:
+            self.processed_count += 1
+
+            try:
+                data = json.loads(line)
+
+                if self._is_GitHub_entry(data):
+                    abstract = self._extract_records_from_json(data)
+                    if abstract:
+                        entry_id = data.get("id", self._generate_id(data))
+
+                        GitHub_records = GitHubRecord(
                                     id=entry_id,
                                     code_text=abstract,
                                     metadata={"original_data_keys": list(data.keys())},
@@ -157,39 +198,9 @@ class GitHubRecordExtractor:
 
                                 # Use model_dump_json() 
                                 # Pydantic V2 handles Unicode properly
-                                json_size = len(
+                        json_size = len(
                                     GitHub_records.model_dump_json().encode("utf-8")
                                 )
-
-                                if current_size + json_size > max_size:
-                                    break
-
-                                records.append(GitHub_records)
-                                current_size += json_size
-                                self.valid_count += 1
-
-                    except Exception:
-                        self.invalid_count += 1
-                        continue
-            else:
-                content = await input_file.read()
-                matches = self.GitHub_pattern.findall(content)
-
-                for github_id, abstract in matches:
-                    self.processed_count += 1
-
-                    try:
-                        GitHub_records = GitHubRecord(
-                            id=github_id,
-                            code_text=abstract,
-                            metadata={"github_id": github_id},
-                            source_format=SourceFormat.TEXT,
-                        )
-
-                        # Use model_dump_json() - Pydantic V2 handles Unicode properly
-                        json_size = len(
-                            GitHub_records.model_dump_json().encode("utf-8")
-                        )
 
                         if current_size + json_size > max_size:
                             break
@@ -198,14 +209,9 @@ class GitHubRecordExtractor:
                         current_size += json_size
                         self.valid_count += 1
 
-                    except Exception:
-                        self.invalid_count += 1
-                        continue
-
-        finally:
-            await input_file.close()
-
-        return records
+            except Exception:
+                self.invalid_count += 1
+                continue
 
     async def _process_zstd_with_parallel_reader(
         self, input_path: str, output_path: str, num_processes: int = 1

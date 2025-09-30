@@ -140,18 +140,59 @@ class WebRecordExtractor:
         try:
             # Process based on file format
             if input_path.endswith(".jsonl") or input_path.endswith(".jsonl.gz"):
-                async for line in input_file:
-                    self.processed_count += 1
+                await self._read_jsonl(max_size, current_size, records, input_file)
+            else:
+                await self._read_text(max_size, current_size, records, input_file)
 
-                    try:
-                        data = json.loads(line)
+        finally:
+            await input_file.close()
 
-                        if isinstance(data, dict) and self._is_WebRecord_entry(data):
-                            abstract = self._extract_articles_from_json(data)
-                            if abstract:
-                                entry_id = data.get("id", self._generate_id(data))
+        return records
 
-                                Web_records = WebRecord(
+    async def _read_text(self, max_size, current_size, records, input_file):
+        content = await input_file.read()
+        matches = self.WebRecord_pattern.findall(content)
+
+        for wiki_id, abstract in matches:
+            self.processed_count += 1
+
+            try:
+                Web_records = WebRecord(
+                            id=wiki_id,
+                            web_text=abstract,
+                            timestamp=None,
+                            url="",
+                            metadata={"wiki_id": wiki_id},
+                            source_format=SourceFormat.TEXT,
+                        )
+
+                        # Use model_dump_json() - Pydantic V2 handles Unicode properly
+                json_size = len(Web_records.model_dump_json().encode("utf-8"))
+
+                if current_size + json_size > max_size:
+                    break
+
+                records.append(Web_records)
+                current_size += json_size
+                self.valid_count += 1
+
+            except Exception:
+                self.invalid_count += 1
+                continue
+
+    async def _read_jsonl(self, max_size, current_size, records, input_file):
+        for line in input_file:
+            self.processed_count += 1
+
+            try:
+                data = json.loads(line)
+
+                if isinstance(data, dict) and self._is_WebRecord_entry(data):
+                    abstract = self._extract_articles_from_json(data)
+                    if abstract:
+                        entry_id = data.get("id", self._generate_id(data))
+
+                        Web_records = WebRecord(
                                     id=entry_id,
                                     web_text=abstract,
                                     timestamp=data.get("timestamp", ""),
@@ -162,39 +203,9 @@ class WebRecordExtractor:
 
                                 # Use model_dump_json() 
                                 # Pydantic V2 handles Unicode properly
-                                json_size = len(
+                        json_size = len(
                                     Web_records.model_dump_json().encode("utf-8")
                                 )
-
-                                if current_size + json_size > max_size:
-                                    break
-
-                                records.append(Web_records)
-                                current_size += json_size
-                                self.valid_count += 1
-
-                    except Exception:
-                        self.invalid_count += 1
-                        continue
-            else:
-                content = await input_file.read()
-                matches = self.WebRecord_pattern.findall(content)
-
-                for wiki_id, abstract in matches:
-                    self.processed_count += 1
-
-                    try:
-                        Web_records = WebRecord(
-                            id=wiki_id,
-                            web_text=abstract,
-                            timestamp=None,
-                            url="",
-                            metadata={"wiki_id": wiki_id},
-                            source_format=SourceFormat.TEXT,
-                        )
-
-                        # Use model_dump_json() - Pydantic V2 handles Unicode properly
-                        json_size = len(Web_records.model_dump_json().encode("utf-8"))
 
                         if current_size + json_size > max_size:
                             break
@@ -203,14 +214,10 @@ class WebRecordExtractor:
                         current_size += json_size
                         self.valid_count += 1
 
-                    except Exception:
-                        self.invalid_count += 1
-                        continue
-
-        finally:
-            await input_file.close()
-
-        return records
+            except Exception:
+                self.invalid_count += 1
+                continue
+        return current_size
 
     async def _process_zstd_with_parallel_reader(
         self, input_path: str, output_path: str, num_processes: int = 1

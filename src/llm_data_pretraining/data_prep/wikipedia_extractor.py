@@ -134,18 +134,56 @@ class WikiArticleExtractor:
         try:
             # Process based on file format
             if input_path.endswith(".jsonl") or input_path.endswith(".jsonl.gz"):
-                async for line in input_file:
-                    self.processed_count += 1
+                await self._read_jsonl(max_size, current_size, records, input_file)
+            else:
+                await self._read_text(max_size, current_size, records, input_file)
+        finally:
+            await input_file.close()
 
-                    try:
-                        data = json.loads(line)
+        return records
 
-                        if self._is_WikiArticle_entry(data):
-                            abstract = self._extract_articles_from_json(data)
-                            if abstract:
-                                entry_id = data.get("id", self._generate_id(data))
+    async def _read_text(self, max_size, current_size, records, input_file):
+        content = await input_file.read()
+        matches = self.WikiArticle_pattern.findall(content)
 
-                                Wiki_articles = WikiArticle(
+        for wiki_id, abstract in matches:
+            self.processed_count += 1
+
+            try:
+                Wiki_articles = WikiArticle(
+                            id=wiki_id,
+                            article_text=abstract,
+                            metadata={"wiki_id": wiki_id},
+                            source_format=SourceFormat.TEXT,
+                        )
+
+                        # Use model_dump_json() - Pydantic V2 handles Unicode properly
+                json_size = len(Wiki_articles.model_dump_json().encode("utf-8"))
+
+                if current_size + json_size > max_size:
+                    break
+
+                records.append(Wiki_articles)
+                current_size += json_size
+                self.valid_count += 1
+
+            except Exception:
+                self.invalid_count += 1
+                continue
+
+    async def _read_jsonl(self, max_size, current_size, records, input_file):
+        for line in input_file:
+            self.processed_count += 1
+
+            try:
+                data = json.loads(line)
+
+                if self._is_WikiArticle_entry(data):
+                    abstract = self._extract_articles_from_json(data)
+                    if abstract:
+                        entry_id = data.get("id", self._generate_id(data))
+
+                        Wiki_articles = WikiArticle(
                                     id=entry_id,
                                     article_text=abstract,
                                     metadata={"original_data_keys": list(data.keys())},
@@ -154,37 +192,9 @@ class WikiArticleExtractor:
 
                                 # Use model_dump_json() 
                                 # Pydantic V2 handles Unicode properly
-                                json_size = len(
+                        json_size = len(
                                     Wiki_articles.model_dump_json().encode("utf-8")
                                 )
-
-                                if current_size + json_size > max_size:
-                                    break
-
-                                records.append(Wiki_articles)
-                                current_size += json_size
-                                self.valid_count += 1
-
-                    except Exception:
-                        self.invalid_count += 1
-                        continue
-            else:
-                content = await input_file.read()
-                matches = self.WikiArticle_pattern.findall(content)
-
-                for wiki_id, abstract in matches:
-                    self.processed_count += 1
-
-                    try:
-                        Wiki_articles = WikiArticle(
-                            id=wiki_id,
-                            article_text=abstract,
-                            metadata={"wiki_id": wiki_id},
-                            source_format=SourceFormat.TEXT,
-                        )
-
-                        # Use model_dump_json() - Pydantic V2 handles Unicode properly
-                        json_size = len(Wiki_articles.model_dump_json().encode("utf-8"))
 
                         if current_size + json_size > max_size:
                             break
@@ -193,14 +203,9 @@ class WikiArticleExtractor:
                         current_size += json_size
                         self.valid_count += 1
 
-                    except Exception:
-                        self.invalid_count += 1
-                        continue
-
-        finally:
-            await input_file.close()
-
-        return records
+            except Exception:
+                self.invalid_count += 1
+                continue
 
     async def _process_zstd_with_parallel_reader(
         self, input_path: str, output_path: str, num_processes: int = 1
