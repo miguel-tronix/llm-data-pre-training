@@ -74,16 +74,16 @@ exclude = [
     "venv",
 ]
 
-[tool.ruff.mccabe]
+[tool.ruff.lint.mccabe]
 max-complexity = 18
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["llm_data_pretraining"]
 
-[tool.ruff.flake8-quotes]
+[tool.ruff.lint.flake8-quotes]
 inline-quotes = "double"
 
-[tool.ruff.flake8-tidy-imports]
+[tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
 [tool.mypy]
