@@ -1,21 +1,38 @@
-#
 import asyncio
 import os
+from pathlib import Path
+from typing import Any
+
 import typer
 from dotenv import load_dotenv as setenvs
-from typing import Any, Optional, Union
-from pathlib import Path
-from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
-from llm_data_pretraining.data_prep.configs import ProcessingStats, PipelineType
-from llm_data_pretraining.data_fetch.download_utils import DownloadResult, DownloadConfig, HFDatasetDownloader
-from llm_data_pretraining.data_prep.pubmed_extractor import PubMedAbstractExtractor
-from llm_data_pretraining.data_prep.github_extractor import GitHubRecordExtractor
-from llm_data_pretraining.data_prep.wikipedia_extractor import WikiArticleExtractor
+
+from llm_data_pretraining.data_clean.clean_and_tokenize import (
+    DeduplicationMethod,
+    JsonlDataCleanPipeline,
+    PIIDetectionConfig,
+    PipelineConfig,
+    PipelineResult,
+    PipelineType,
+    TokenizationConfig,
+    TokenizationPreparer,
+)
+from llm_data_pretraining.data_fetch.download_utils import (
+    DownloadConfig,
+    DownloadResult,
+    HFDatasetDownloader,
+)
 from llm_data_pretraining.data_prep.allenai_extractor import WebRecordExtractor
-from llm_data_pretraining.data_clean.clean_and_tokenize import DeduplicationMethod,\
-      PipelineConfig, TokenizationConfig, TokenizationPreparer, \
-    PIIDetectionConfig, JsonlDataCleanPipeline, PipelineResult, PipelineType
-from llm_data_pretraining.data_train.tokenization import TokenizationResult, TokenizerConfig, BPETokenizer
+from llm_data_pretraining.data_prep.configs import PipelineType, ProcessingStats
+from llm_data_pretraining.data_prep.github_extractor import GitHubRecordExtractor
+from llm_data_pretraining.data_prep.pubmed_extractor import PubMedAbstractExtractor
+from llm_data_pretraining.data_prep.wikipedia_extractor import WikiArticleExtractor
+from llm_data_pretraining.data_train.tokenization import (
+    BPETokenizer,
+    TokenizationResult,
+    TokenizerConfig,
+)
+from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
+
 ENV_FILE_PATH = ".env"
 BASEDATA_PATH = "/opt/llm-data-pretraining"
 DATASET_URL = "https://h"
@@ -38,21 +55,19 @@ logger = get_pipeline_logger()
 
 
 
-from pathlib import Path
-from typing import Optional
-
-# Assuming the previously defined DownloadConfig, DownloadResult, 
+# Assuming the previously defined DownloadConfig, DownloadResult,
 # and HFDatasetDownloader classes are in the same file or imported.
+
 
 async def download_pile_uncopyrighted_multiproc(
     repo_id: str = "monology/pile-uncopyrighted",
     raw_data_dir: str = "rawdata",
-    file_pattern: Optional[str] = None,
+    file_pattern: str | None = None,
     max_retries: int = 3,
     timeout: int = 30,
     chunk_size: int = 8192,
-    max_files: Optional[int] = None,
-    num_parallel_downloads: int = 4
+    max_files: int | None = None,
+    num_parallel_downloads: int = 4,
 ) -> DownloadResult:
     """
     Main function to download files from a Hugging Face dataset repository.
@@ -66,9 +81,9 @@ async def download_pile_uncopyrighted_multiproc(
         file_pattern=file_pattern,
         chunk_size=chunk_size,
         max_files=max_files,
-        num_parallel_downloads=num_parallel_downloads
+        num_parallel_downloads=num_parallel_downloads,
     )
-    
+
     async with HFDatasetDownloader(config) as downloader:
         return await downloader.download_dataset()
 
@@ -76,17 +91,17 @@ async def download_pile_uncopyrighted_multiproc(
 async def download_pile_uncopyrighted_fast(
     repo_id: str = "monology/pile-uncopyrighted",
     raw_data_dir: str = "rawdata",
-    file_pattern: Optional[str] = None,
+    file_pattern: str | None = None,
     max_retries: int = 3,
     timeout: int = 30,
     chunk_size: int = 8192,
-    max_files: Optional[int] = None,
-    num_parallel_downloads: int = 4
+    max_files: int | None = None,
+    num_parallel_downloads: int = 4,
 ) -> DownloadResult:
     """
     Main function to download files from a Hugging Face dataset repository.
     It automatically uses parallel downloads for files larger than 500MB.
-    
+
     Args:
         repo_id: Hugging Face dataset repository ID.
         raw_data_dir: Directory to store downloaded files.
@@ -96,7 +111,7 @@ async def download_pile_uncopyrighted_fast(
         chunk_size: Chunk size for downloading.
         max_files: Maximum number of files to download (None for no limit).
         num_parallel_downloads: Number of parallel threads for large files.
-        
+
     Returns:
         DownloadResult with download statistics.
     """
@@ -109,12 +124,13 @@ async def download_pile_uncopyrighted_fast(
         file_pattern=file_pattern,
         chunk_size=chunk_size,
         max_files=max_files,
-        num_parallel_downloads=num_parallel_downloads
+        num_parallel_downloads=num_parallel_downloads,
     )
-    
+
     # Create downloader and execute download
     async with HFDatasetDownloader(config) as downloader:
         return await downloader.download_dataset()
+
 
 # Example of how to run this function:
 #
@@ -123,7 +139,7 @@ async def download_pile_uncopyrighted_fast(
 # async def main():
 #     result = await download_pile_uncopyrighted(
 #         # To test, let's download just one large file from the dataset
-#         file_pattern=r"train/00.jsonl.zst", 
+#         file_pattern=r"train/00.jsonl.zst",
 #         max_files=1,
 #         num_parallel_downloads=8 # Use 8 parallel threads for the download
 #     )
@@ -134,19 +150,20 @@ async def download_pile_uncopyrighted_fast(
 # if __name__ == "__main__":
 #     asyncio.run(main())
 
+
 # --- Main Download Function ---
 async def download_pile_uncopyrighted(
     repo_id: str = "monology/pile-uncopyrighted",
     raw_data_dir: str = "rawdata",
-    file_pattern: Optional[str] = None,
+    file_pattern: str | None = None,
     max_retries: int = 3,
     timeout: int = 30,
     chunk_size: int = 8192,
-    max_files: Optional[int] = None
+    max_files: int | None = None,
 ) -> DownloadResult:
     """
     Main function to download files from the monology/pile-uncopyrighted dataset
-    
+
     Args:
         repo_id: Hugging Face dataset repository ID
         raw_data_dir: Directory to store downloaded files
@@ -155,7 +172,7 @@ async def download_pile_uncopyrighted(
         timeout: Request timeout in seconds
         chunk_size: Chunk size for downloading
         max_files: Maximum number of files to download (None for no limit)
-        
+
     Returns:
         DownloadResult with download statistics
     """
@@ -167,41 +184,38 @@ async def download_pile_uncopyrighted(
         timeout=timeout,
         file_pattern=file_pattern,
         chunk_size=chunk_size,
-        max_files=max_files
+        max_files=max_files,
     )
-    
+
     # Create downloader and execute download
     downloader = HFDatasetDownloader(config)
-    
+
     async with downloader:
         return await downloader.download_dataset()
 
+
 # --- Main Extraction Coroutine ---
 async def run_pubmed_extraction(
-    input_path: str, 
-    output_path: Optional[str] = None,
-    return_objects: bool = False
+    input_path: str, output_path: str | None = None, return_objects: bool = False
 ) -> Any:
     """
     Main coroutine to extract PubMed abstracts from Pile-Uncopyrighted dataset
-    
+
     Args:
         input_path: Path to input dataset file
         output_path: Path to output JSONL file (required if return_objects=False)
         return_objects: If True, returns list of objects instead of writing to file
-        
+
     Returns:
         Either statistics dict (if writing to file) or list of PubMedAbstract objects
     """
-    
+
     extractor = PubMedAbstractExtractor(
-        use_parallel_zstd=True, 
-        num_processes=1,
-        file_size_mb=PUBMED_JSONL_SIZE_MB
+        use_parallel_zstd=True, num_processes=1, file_size_mb=PUBMED_JSONL_SIZE_MB
     )
-    
+
     logger.info("Starting PubMed abstract extraction...")
-    
+
     if return_objects:
         abstracts = await extractor.extract_abstracts_to_memory(input_path)
         logger.info(f"Extracted {len(abstracts)} abstracts to memory")
@@ -209,36 +223,33 @@ async def run_pubmed_extraction(
     else:
         if not output_path:
             raise ValueError("output_path is required when return_objects=False")
-            
+
         stats = await extractor.extract_abstracts_to_file(input_path, output_path)
         logger.info("Extraction completed successfully!")
         return stats
 
+
 async def run_github_extraction(
-    input_path: str, 
-    output_path: Optional[str] = None,
-    return_objects: bool = False
+    input_path: str, output_path: str | None = None, return_objects: bool = False
 ) -> Any:
     """
     Main coroutine to extract GitHub records from Pile-Uncopyrighted dataset
-    
+
     Args:
         input_path: Path to input dataset file
         output_path: Path to output JSONL file (required if return_objects=False)
         return_objects: If True, returns list of objects instead of writing to file
-        
+
     Returns:
         Either statistics dict (if writing to file) or list of GitHubRecord objects
     """
-    
+
     extractor = GitHubRecordExtractor(
-        use_parallel_zstd=True, 
-        num_processes=1,
-        file_size_mb=GITHUB_JSONL_SIZE_MB
+        use_parallel_zstd=True, num_processes=1, file_size_mb=GITHUB_JSONL_SIZE_MB
     )
-    
+
     logger.info("Starting GitHub record extraction...")
-    
+
     if return_objects:
         records = await extractor.extract_records_to_memory(input_path)
         logger.info(f"Extracted {len(records)} abstracts to memory")
@@ -246,35 +257,33 @@ async def run_github_extraction(
     else:
         if not output_path:
             raise ValueError("output_path is required when return_objects=False")
-            
+
         stats = await extractor.extract_records_to_file(input_path, output_path)
         logger.info("Extraction completed successfully!")
         return stats
 
+
 async def run_wikipedia_extraction(
-    input_path: str, 
-    output_path: Optional[str] = None,
-    return_objects: bool = False
+    input_path: str, output_path: str | None = None, return_objects: bool = False
 ) -> Any:
     """
     Main coroutine to extract Wikipedia articles from Pile-Uncopyrighted dataset
-    
+
     Args:
         input_path: Path to input dataset file
         output_path: Path to output JSONL file (required if return_objects=False)
         return_objects: If True, returns list of objects instead of writing to file
-        
+
     Returns:
         Either statistics dict (if writing to file) or list of GitHubRecord objects
     """
-    
+
     extractor = WikiArticleExtractor(
-        use_parallel_zstd=True, 
-        num_processes=1,
-        file_size_mb=WIKI_JSONL_SIZE_MB)
-    
+        use_parallel_zstd=True, num_processes=1, file_size_mb=WIKI_JSONL_SIZE_MB
+    )
+
     logger.info("Starting Wikipedia article extraction...")
-    
+
     if return_objects:
         records = await extractor.extract_articles_to_memory(input_path)
         logger.info(f"Extracted {len(records)} abstracts to memory")
@@ -282,36 +291,36 @@ async def run_wikipedia_extraction(
     else:
         if not output_path:
             raise ValueError("output_path is required when return_objects=False")
-            
+
         stats = await extractor.extract_articles_to_file(input_path, output_path)
         logger.info("Extraction completed successfully!")
         return stats
 
+
 async def run_allenai_extraction(
-    input_path: str, 
-    output_path: Optional[str] = None,
-    return_objects: bool = False
+    input_path: str, output_path: str | None = None, return_objects: bool = False
 ) -> Any:
     """
     Main coroutine to extract Wikipedia articles from Pile-Uncopyrighted dataset
-    
+
     Args:
         input_path: Path to input dataset file
         output_path: Path to output JSONL file (required if return_objects=False)
         return_objects: If True, returns list of objects instead of writing to file
-        
+
     Returns:
         Either statistics dict (if writing to file) or list of GitHubRecord objects
     """
-    
+
     extractor = WebRecordExtractor(
         use_parallel_zstd=False,
-        use_streaming=True, 
+        use_streaming=True,
         num_processes=1,
-        file_size_mb=WEB_JSONL_SIZE_MB)
-    
+        file_size_mb=WEB_JSONL_SIZE_MB,
+    )
+
     logger.info("Starting Wikipedia article extraction...")
-    
+
     if return_objects:
         records = await extractor.extract_articles_to_memory(input_path)
         logger.info(f"Extracted {len(records)} abstracts to memory")
@@ -319,45 +328,43 @@ async def run_allenai_extraction(
     else:
         if not output_path:
             raise ValueError("output_path is required when return_objects=False")
-            
+
         stats = await extractor.extract_articles_to_file(input_path, output_path)
         logger.info("Extraction completed successfully!")
         return stats
+
 
 # New routine specifically for generating pubmed_abstracts.jsonl
 async def generate_pubmed_abstracts_jsonl(
-    input_zst_path: Path,
-    output_jsonl_path: Path,
-    max_abstracts: Optional[int] = None
+    input_zst_path: Path, output_jsonl_path: Path, max_abstracts: int | None = None
 ) -> ProcessingStats:
     """
     Generate pubmed_abstracts.jsonl from a ZST file using parallel processing
-    
+
     Args:
         input_zst_path: Path to input ZST file
         output_jsonl_path: Path to output JSONL file
         max_abstracts: Maximum number of abstracts to extract
-        
+
     Returns:
         Dictionary with extraction statistics
     """
-    extractor = PubMedAbstractExtractor(
-        num_processes=1
-    )
-    
+    extractor = PubMedAbstractExtractor(num_processes=1)
+
     return await extractor.extract_abstracts_to_file(
         input_path=f"{input_zst_path.absolute}",
-        output_path=f"{output_jsonl_path.absolute}"
+        output_path=f"{output_jsonl_path.absolute}",
     )
+
 
 # --- Example Usage with Pydantic V2 ---
 def run_complete_clean_tokenize_pipeline(
-        input_jsonl_path: str = "path/to/your/pubmed_abstracts.jsonl",
-        output_clean_dir: str = "processed_data_pydantic",
-        pipeline_record_type: str = PipelineType.PUBMED
-    ) -> PipelineResult:
+    input_jsonl_path: str = "path/to/your/pubmed_abstracts.jsonl",
+    output_clean_dir: str = "processed_data_pydantic",
+    pipeline_record_type: str = PipelineType.PUBMED,
+) -> PipelineResult:
     """Run the complete clean processing pipeline with Pydantic V2"""
-    
+
     # Configuration with Pydantic validation
     config = PipelineConfig(
         input_path=Path(input_jsonl_path),
@@ -370,89 +377,100 @@ def run_complete_clean_tokenize_pipeline(
             detect_phones=True,
             detect_ssn=True,
             detect_patient_ids=True,
-            detect_demographics=True
+            detect_demographics=True,
         ),
         batch_size=1000,
-        pipeline_type=pipeline_record_type if isinstance(pipeline_record_type, PipelineType) else PipelineType.PUBMED
+        pipeline_type=pipeline_record_type
+        if isinstance(pipeline_record_type, PipelineType)
+        else PipelineType.PUBMED,
     )
-    
+
     # Run the pipeline
     pipeline = JsonlDataCleanPipeline(config)
     result = pipeline.run_pipeline()
-    
+
     # Log results
     logger.info(f"Pipeline completed in {result.processing_time:.2f} seconds")
     logger.info(f"Results: {result.model_dump_json(indent=2)}")
-    
+
     # Prepare for tokenization
     token_config = TokenizationConfig(output_dir=config.output_dir)
     token_preparer = TokenizationPreparer(token_config)
-    
+
     # Create training corpus
-    corpus_file = config.output_dir / f"training_corpus_{config.pipeline_type.value}.txt"
+    corpus_file = (
+        config.output_dir / f"training_corpus_{config.pipeline_type.value}.txt"
+    )
     if result.final_file is not None:
-        line_count = token_preparer.create_training_corpus(result.final_file, corpus_file)
-    
+        line_count = token_preparer.create_training_corpus(
+            result.final_file, corpus_file
+        )
+
         logger.info(f"Created training corpus with {line_count} lines")
-        logger.info(f"Files ready for BPE tokenizer training:")
+        logger.info("Files ready for BPE tokenizer training:")
         logger.info(f"Final dataset: {result.final_file}")
         logger.info(f"Training corpus: {corpus_file}")
     else:
-        logger.warning(f"Pipeline did not produce a final file to tokenize - please investigate")
-    
+        logger.warning(
+            "Pipeline did not produce a final file to tokenize - please investigate"
+        )
+
     return result
+
 
 # Main function for tokenization pipeline
 def run_tokenization_pipeline(
-    corpus_path: Union[str, Path],
-    output_dir: Union[str, Path],
+    corpus_path: str | Path,
+    output_dir: str | Path,
     pipeline_record_type: PipelineType = PipelineType.PUBMED,
     vocab_size: int = 30000,
     min_frequency: int = 2,
-    max_length: int = 512
+    max_length: int = 512,
 ) -> TokenizationResult:
     """Complete tokenization pipeline with Pydantic V2"""
     corpus_path = Path(corpus_path)
     output_dir = Path(output_dir)
-    
+
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Initialize tokenizer with validated config
     config = TokenizerConfig(
         vocab_size=vocab_size,
         min_frequency=min_frequency,
         max_length=max_length,
-        special_tokens=["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]", "<|endoftext|>"]
+        special_tokens=["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]", "<|endoftext|>"],
     )
-    
+
     tokenizer = BPETokenizer(config)
-    
+
     # Train tokenizer
     tokenizer.train(corpus_path)
-    
+
     # Save tokenizer
     tokenizer.save_tokenizer(output_dir / "tokenizer")
-    
+
     # Tokenize corpus and save as binary
     tokens_path = output_dir / f"tokens_{pipeline_record_type.value}.bin"
     total_tokens = tokenizer.tokenize_corpus(corpus_path, tokens_path)
-    
+
     # Create and return result
     result = TokenizationResult(
         success=True,
         output_dir=output_dir,
         vocab_size=tokenizer.tokenizer.get_vocab_size(),
         total_tokens=total_tokens,
-        tokenizer_config=config
+        tokenizer_config=config,
     )
-    
+
     logger.info(f"Tokenization pipeline complete. Files saved to {output_dir}")
     return result
+
 
 # Integration with your existing Typer CLI
 def add_tokenization_commands(app):
     """Add tokenization commands to Typer app"""
+
     @app.command()
     def tokenize(
         corpus_path: Path = typer.Argument(..., help="Path to training corpus"),
@@ -462,175 +480,200 @@ def add_tokenization_commands(app):
         max_length: int = typer.Option(512, help="Maximum sequence length"),
     ):
         """Tokenize training corpus using BPE"""
-        
+
         result = run_tokenization_pipeline(
             corpus_path=corpus_path,
             output_dir=output_dir,
             vocab_size=vocab_size,
             min_frequency=min_frequency,
-            max_length=max_length
+            max_length=max_length,
         )
-        
+
         # Output result as JSON
         typer.echo(result.model_dump_json(indent=2))
-        
+
         return result
-    
+
     return app
+
 
 async def main():
     # Download the dataset
-    #download_result = await download_pile_uncopyrighted(
+    # download_result = await download_pile_uncopyrighted(
     #    file_pattern=r".*\.jsonl\.zst"  # Only download gzipped JSONL files
-    #)
+    # )
 
     download_result = await download_pile_uncopyrighted_multiproc(
         repo_id="monology/pile-uncopyrighted",
         raw_data_dir=RAWDATA_PATH,
         file_pattern=r".*\.jsonl\.zst",  # Only download compressed JSONL files
-        max_retries=10,                   # More retries for large files
-        timeout=120,                     # Longer timeout for large files
-        chunk_size=32768,                 # Larger chunk size for faster downloads
+        max_retries=10,  # More retries for large files
+        timeout=120,  # Longer timeout for large files
+        chunk_size=32768,  # Larger chunk size for faster downloads
         max_files=1,
-        num_parallel_downloads=PARALLEL_EXECS # Use 8 parallel threads for the download
-     )
+        num_parallel_downloads=PARALLEL_EXECS,  # Use 8 parallel threads for the download
+    )
 
-#    download_result = await download_pile_uncopyrighted(
-#    repo_id="monology/pile-uncopyrighted",
-#    raw_data_dir=RAWDATA_PATH,
-#    file_pattern=r".*\.jsonl\.zst",  # Only download compressed JSONL files
-#    max_retries=10,                   # More retries for large files
-#    timeout=120,                     # Longer timeout for large files
-#    chunk_size=32768,                 # Larger chunk size for faster downloads
-#    max_files=1
-#    )
+    #    download_result = await download_pile_uncopyrighted(
+    #    repo_id="monology/pile-uncopyrighted",
+    #    raw_data_dir=RAWDATA_PATH,
+    #    file_pattern=r".*\.jsonl\.zst",  # Only download compressed JSONL files
+    #    max_retries=10,                   # More retries for large files
+    #    timeout=120,                     # Longer timeout for large files
+    #    chunk_size=32768,                 # Larger chunk size for faster downloads
+    #    max_files=1
+    #    )
     if download_result.success:
         # Extract PubMed abstracts from downloaded files
         for file_path in download_result.downloaded_files:
             pubmed_extraction_stats = None
             clean_tokenize_stats = None
             bpe_tokenize_stats = None
-            
-            pubmed_extraction_stats  = await run_pubmed_extraction(
+
+            pubmed_extraction_stats = await run_pubmed_extraction(
                 input_path=f"{RAWDATA_PATH}/{file_path}",
                 output_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
-                return_objects=False
+                return_objects=False,
             )
             if pubmed_extraction_stats:
                 BPE_CORPUS_FILE = f"training_corpus_{PipelineType.PUBMED.value}.txt"
                 logger.info(f"Extracted {pubmed_extraction_stats}")
-                if isinstance(pubmed_extraction_stats, ProcessingStats) \
-                and int(f'{pubmed_extraction_stats.output_size_mb}') > 0:
+                if (
+                    isinstance(pubmed_extraction_stats, ProcessingStats)
+                    and int(f"{pubmed_extraction_stats.output_size_mb}") > 0
+                ):
                     clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
                         input_jsonl_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
                         output_clean_dir=CLEANDATA_PATH,
-                        pipeline_record_type=PipelineType.PUBMED
+                        pipeline_record_type=PipelineType.PUBMED,
                     )
                 if clean_tokenize_stats and clean_tokenize_stats.success:
-                    logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
+                    logger.info(
+                        f"Produced a training corpus at: {clean_tokenize_stats.final_file}"
+                    )
                     bpe_tokenize_stats = run_tokenization_pipeline(
                         corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
-                        output_dir= TRAINDATA_PATH,
-                        pipeline_record_type=PipelineType.PUBMED
+                        output_dir=TRAINDATA_PATH,
+                        pipeline_record_type=PipelineType.PUBMED,
                     )
                     logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
-            
+
             github_extraction_stats = await run_github_extraction(
                 input_path=f"{RAWDATA_PATH}/{file_path}",
                 output_path=f"{PRECLEANDATA_PATH}/{GITHUB_EXTRACT_FILE}",
-                return_objects=False
+                return_objects=False,
             )
             if github_extraction_stats:
                 BPE_CORPUS_FILE = f"training_corpus_{PipelineType.GITHUB.value}.txt"
                 logger.info(f"Extracted {github_extraction_stats}")
-                if isinstance(github_extraction_stats, ProcessingStats) \
-                and int(f'{github_extraction_stats.output_size_mb}') > 0:
+                if (
+                    isinstance(github_extraction_stats, ProcessingStats)
+                    and int(f"{github_extraction_stats.output_size_mb}") > 0
+                ):
                     clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
                         input_jsonl_path=f"{PRECLEANDATA_PATH}/{GITHUB_EXTRACT_FILE}",
                         output_clean_dir=CLEANDATA_PATH,
-                        pipeline_record_type=PipelineType.GITHUB
+                        pipeline_record_type=PipelineType.GITHUB,
                     )
                 if clean_tokenize_stats and clean_tokenize_stats.success:
-                    logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
+                    logger.info(
+                        f"Produced a training corpus at: {clean_tokenize_stats.final_file}"
+                    )
                     bpe_tokenize_stats = run_tokenization_pipeline(
                         corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
-                        output_dir= TRAINDATA_PATH,
-                        pipeline_record_type=PipelineType.GITHUB
+                        output_dir=TRAINDATA_PATH,
+                        pipeline_record_type=PipelineType.GITHUB,
                     )
                     logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
-            
+
             wiki_extraction_stats = await run_wikipedia_extraction(
                 input_path=f"{RAWDATA_PATH}/{file_path}",
                 output_path=f"{PRECLEANDATA_PATH}/{WIKI_EXTRACT_FILE}",
-                return_objects=False
+                return_objects=False,
             )
             if wiki_extraction_stats:
                 BPE_CORPUS_FILE = f"training_corpus_{PipelineType.WIKI.value}.txt"
                 logger.info(f"Extracted {wiki_extraction_stats}")
-                if isinstance(wiki_extraction_stats, ProcessingStats) \
-                and int(f'{wiki_extraction_stats.output_size_mb}') > 0:
+                if (
+                    isinstance(wiki_extraction_stats, ProcessingStats)
+                    and int(f"{wiki_extraction_stats.output_size_mb}") > 0
+                ):
                     clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
                         input_jsonl_path=f"{PRECLEANDATA_PATH}/{WIKI_EXTRACT_FILE}",
                         output_clean_dir=CLEANDATA_PATH,
-                        pipeline_record_type=PipelineType.WIKI
+                        pipeline_record_type=PipelineType.WIKI,
                     )
                 if clean_tokenize_stats and clean_tokenize_stats.success:
-                    logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
+                    logger.info(
+                        f"Produced a training corpus at: {clean_tokenize_stats.final_file}"
+                    )
                     bpe_tokenize_stats = run_tokenization_pipeline(
                         corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
-                        output_dir= TRAINDATA_PATH,
-                        pipeline_record_type=PipelineType.WIKI
+                        output_dir=TRAINDATA_PATH,
+                        pipeline_record_type=PipelineType.WIKI,
                     )
                     logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
     else:
         logger.error(f"Download failed: {download_result.message}")
-    
+
     web_extraction_stats = await run_allenai_extraction(
-                input_path=f"allenai/c4",
-                output_path=f"{PRECLEANDATA_PATH}/{WEB_EXTRACT_FILE}",
-                return_objects=False
+        input_path="allenai/c4",
+        output_path=f"{PRECLEANDATA_PATH}/{WEB_EXTRACT_FILE}",
+        return_objects=False,
     )
     if web_extraction_stats:
         BPE_CORPUS_FILE = f"training_corpus_{PipelineType.WEB.value}.txt"
         logger.info(f"Extracted {web_extraction_stats}")
-        if isinstance(web_extraction_stats, ProcessingStats) \
-        and int(f'{web_extraction_stats.output_size_mb}') > 0:
+        if (
+            isinstance(web_extraction_stats, ProcessingStats)
+            and int(f"{web_extraction_stats.output_size_mb}") > 0
+        ):
             clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
                 input_jsonl_path=f"{PRECLEANDATA_PATH}/{WEB_EXTRACT_FILE}",
                 output_clean_dir=CLEANDATA_PATH,
-                pipeline_record_type=PipelineType.WEB
+                pipeline_record_type=PipelineType.WEB,
             )
             if clean_tokenize_stats and clean_tokenize_stats.success:
-                logger.info(f"Produced a training corpus at: {clean_tokenize_stats.final_file}")
+                logger.info(
+                    f"Produced a training corpus at: {clean_tokenize_stats.final_file}"
+                )
                 bpe_tokenize_stats = run_tokenization_pipeline(
                     corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
-                    output_dir= TRAINDATA_PATH,
-                    pipeline_record_type=PipelineType.WEB
+                    output_dir=TRAINDATA_PATH,
+                    pipeline_record_type=PipelineType.WEB,
                 )
                 logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
-    
+
+
 if __name__ == "__main__":
     setenvs(f"{ENV_FILE_PATH}")
-    BASEDATA_PATH = os.getenv("BASEDATA_PATH",BASEDATA_PATH)
-    RAWDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('RAWDATA_PATH',RAWDATA_PATH)}"
-    PRECLEANDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('PRECLEANDATA_PATH',PRECLEANDATA_PATH)}"
-    CLEANDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('CLEANDATA_PATH',CLEANDATA_PATH)}"
-    TRAINDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('TRAINDATA_PATH',TRAINDATA_PATH)}"
-    PUBMED_EXTRACT_FILE = os.getenv("PUBMED_EXTRACT_FILE",PUBMED_EXTRACT_FILE)
-    GITHUB_EXTRACT_FILE = os.getenv("GITHUB_EXTRACT_FILE",GITHUB_EXTRACT_FILE)
-    WIKI_EXTRACT_FILE = os.getenv("WIKI_EXTRACT_FILE",WIKI_EXTRACT_FILE)
-    WEB_EXTRACT_FILE = os.getenv("WEB_EXTRACT_FILE",WEB_EXTRACT_FILE)
-    PUBMED_JSONL_SIZE_MB = int(f"{os.getenv('PUBMED_JSONL_SIZE_MB',PUBMED_JSONL_SIZE_MB)}")
-    GITHUB_JSONL_SIZE_MB = int(f"{os.getenv('GITHUB_JSONL_SIZE_MB',GITHUB_JSONL_SIZE_MB)}")
-    WIKI_JSONL_SIZE_MB = int(f"{os.getenv('WIKI_JSONL_SIZE_MB',WIKI_JSONL_SIZE_MB)}")
-    WEB_JSONL_SIZE_MB = int(f"{os.getenv('WEB_JSONL_SIZE_MB',WEB_JSONL_SIZE_MB)}")
-    PARALLEL_EXECS = int(f"{os.getenv('NUM_PROCESSES',PARALLEL_EXECS)}")
-    BPE_CORPUS_FILE = f"{os.getenv('BPE_CORPUS_FILE',BPE_CORPUS_FILE)}"
-    LOG_FILE = os.getenv("LOG_FILE","logs/pretraining_pipeline.log")
-    LOG_LEVEL = os.getenv("LOG_LEVEL","INFO")
-    LOG_FORMATTER = os.getenv("LOG_FORMATTER","%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    BASEDATA_PATH = os.getenv("BASEDATA_PATH", BASEDATA_PATH)
+    RAWDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('RAWDATA_PATH', RAWDATA_PATH)}"
+    PRECLEANDATA_PATH = (
+        f"{BASEDATA_PATH}/{os.getenv('PRECLEANDATA_PATH', PRECLEANDATA_PATH)}"
+    )
+    CLEANDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('CLEANDATA_PATH', CLEANDATA_PATH)}"
+    TRAINDATA_PATH = f"{BASEDATA_PATH}/{os.getenv('TRAINDATA_PATH', TRAINDATA_PATH)}"
+    PUBMED_EXTRACT_FILE = os.getenv("PUBMED_EXTRACT_FILE", PUBMED_EXTRACT_FILE)
+    GITHUB_EXTRACT_FILE = os.getenv("GITHUB_EXTRACT_FILE", GITHUB_EXTRACT_FILE)
+    WIKI_EXTRACT_FILE = os.getenv("WIKI_EXTRACT_FILE", WIKI_EXTRACT_FILE)
+    WEB_EXTRACT_FILE = os.getenv("WEB_EXTRACT_FILE", WEB_EXTRACT_FILE)
+    PUBMED_JSONL_SIZE_MB = int(
+        f"{os.getenv('PUBMED_JSONL_SIZE_MB', PUBMED_JSONL_SIZE_MB)}"
+    )
+    GITHUB_JSONL_SIZE_MB = int(
+        f"{os.getenv('GITHUB_JSONL_SIZE_MB', GITHUB_JSONL_SIZE_MB)}"
+    )
+    WIKI_JSONL_SIZE_MB = int(f"{os.getenv('WIKI_JSONL_SIZE_MB', WIKI_JSONL_SIZE_MB)}")
+    WEB_JSONL_SIZE_MB = int(f"{os.getenv('WEB_JSONL_SIZE_MB', WEB_JSONL_SIZE_MB)}")
+    PARALLEL_EXECS = int(f"{os.getenv('NUM_PROCESSES', PARALLEL_EXECS)}")
+    BPE_CORPUS_FILE = f"{os.getenv('BPE_CORPUS_FILE', BPE_CORPUS_FILE)}"
+    LOG_FILE = os.getenv("LOG_FILE", "logs/pretraining_pipeline.log")
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    LOG_FORMATTER = os.getenv(
+        "LOG_FORMATTER", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     logger.setLevel(LOG_LEVEL)
     for handler in logger.handlers:
         handler.setLevel(LOG_LEVEL)
     asyncio.run(main())
-    
