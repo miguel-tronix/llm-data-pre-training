@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -212,8 +213,6 @@ def run_parquet_pipeline():
 # --- Benchmark Comparison ---
 def benchmark_formats():
     """Compare performance of JSONL vs Parquet"""
-    import time
-
     # Test with sample data
     test_file = Path("sample_data.jsonl")
     parquet_file = Path("sample_data.parquet")
@@ -228,6 +227,8 @@ def benchmark_formats():
     # Time Parquet reading
     start = time.time()
     table = pq.read_table(parquet_file)
+    pddf = table.to_pandas().dataframe()
+    logger.info(f"Parquet read {len(pddf)} records")
     parquet_time = time.time() - start
 
     # Compare file sizes
