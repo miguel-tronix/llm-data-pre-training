@@ -10,6 +10,7 @@ from typing import Any
 
 import jsonlines
 from data_prep.fast_zst_reader import ParallelZstdJsonlReader
+from data_prep.configs import PipelineType
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tqdm import tqdm
 from utils.pipeline_logger import get_pipeline_logger
@@ -41,15 +42,6 @@ class PIIDetectionConfig(BaseModel):
     )
 
     model_config = ConfigDict(extra="forbid")
-
-
-# --- Pydantic V2 Models ---
-class PipelineType(str, Enum):
-    PUBMED = "pubmed"
-    GITHUB = "github"
-    WIKI = "wikipedia"
-    WEB = "web_c4"
-
 
 class PipelineConfig(BaseModel):
     """Configuration for the processing pipeline"""

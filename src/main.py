@@ -12,7 +12,6 @@ from llm_data_pretraining.data_clean.clean_and_tokenize import (
     PIIDetectionConfig,
     PipelineConfig,
     PipelineResult,
-    PipelineType,
     TokenizationConfig,
     TokenizationPreparer,
 )
@@ -63,11 +62,8 @@ async def download_pile_uncopyrighted_multiproc(
     repo_id: str = "monology/pile-uncopyrighted",
     raw_data_dir: str = "rawdata",
     file_pattern: str | None = None,
-    max_retries: int = 3,
-    timeout: int = 30,
     chunk_size: int = 8192,
-    max_files: int | None = None,
-    num_parallel_downloads: int = 4,
+    **kwargs: Any,
 ) -> DownloadResult:
     """
     Main function to download files from a Hugging Face dataset repository.
@@ -76,12 +72,12 @@ async def download_pile_uncopyrighted_multiproc(
     config = DownloadConfig(
         repo_id=repo_id,
         raw_data_dir=Path(raw_data_dir),
-        max_retries=max_retries,
-        timeout=timeout,
+        max_retries=kwargs.get("max_retries", 3),
+        timeout=kwargs.get("timeout", 30),
         file_pattern=file_pattern,
         chunk_size=chunk_size,
-        max_files=max_files,
-        num_parallel_downloads=num_parallel_downloads,
+        max_files=kwargs.get("max_files", None),
+        num_parallel_downloads=kwargs.get("num_parallel_downloads", 4),
     )
 
     async with HFDatasetDownloader(config) as downloader:
