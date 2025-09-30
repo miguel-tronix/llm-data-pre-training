@@ -90,9 +90,7 @@ async def download_pile_uncopyrighted_fast(
     file_pattern: str | None = None,
     max_retries: int = 3,
     timeout: int = 30,
-    chunk_size: int = 8192,
-    max_files: int | None = None,
-    num_parallel_downloads: int = 4,
+    **kwargs: Any,
 ) -> DownloadResult:
     """
     Main function to download files from a Hugging Face dataset repository.
@@ -118,9 +116,9 @@ async def download_pile_uncopyrighted_fast(
         max_retries=max_retries,
         timeout=timeout,
         file_pattern=file_pattern,
-        chunk_size=chunk_size,
-        max_files=max_files,
-        num_parallel_downloads=num_parallel_downloads,
+        chunk_size=kwargs.get("chunk_size", 8192),
+        max_files=kwargs.get("max_files",1),
+        num_parallel_downloads=kwargs.get("num_parallel_downloads", 4)
     )
 
     # Create downloader and execute download
@@ -154,8 +152,7 @@ async def download_pile_uncopyrighted(
     file_pattern: str | None = None,
     max_retries: int = 3,
     timeout: int = 30,
-    chunk_size: int = 8192,
-    max_files: int | None = None,
+    **kwargs: Any,
 ) -> DownloadResult:
     """
     Main function to download files from the monology/pile-uncopyrighted dataset
@@ -179,8 +176,8 @@ async def download_pile_uncopyrighted(
         max_retries=max_retries,
         timeout=timeout,
         file_pattern=file_pattern,
-        chunk_size=chunk_size,
-        max_files=max_files,
+        chunk_size=kwargs.get("chunk_size", 8192),
+        max_files=kwargs.get("max_files",1),
     )
 
     # Create downloader and execute download
@@ -419,9 +416,7 @@ def run_tokenization_pipeline(
     corpus_path: str | Path,
     output_dir: str | Path,
     pipeline_record_type: PipelineType = PipelineType.PUBMED,
-    vocab_size: int = 30000,
-    min_frequency: int = 2,
-    max_length: int = 512,
+    **kwargs: Any,
 ) -> TokenizationResult:
     """Complete tokenization pipeline with Pydantic V2"""
     corpus_path = Path(corpus_path)
@@ -432,9 +427,9 @@ def run_tokenization_pipeline(
 
     # Initialize tokenizer with validated config
     config = TokenizerConfig(
-        vocab_size=vocab_size,
-        min_frequency=min_frequency,
-        max_length=max_length,
+        vocab_size=kwargs.get("vocab_size", 30000),
+        min_frequency=kwargs.get("min_frequency", 2),
+        max_length=kwargs.get("max_length", 512),
         special_tokens=["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]", "<|endoftext|>"],
     )
 
@@ -469,14 +464,18 @@ def add_tokenization_commands(app):
 
     @app.command()
     def tokenize(
-        corpus_path: Path = typer.Argument(..., help="Path to training corpus"),
-        output_dir: Path = typer.Option(Path("tokenized"), help="Output directory"),
-        vocab_size: int = typer.Option(30000, help="Vocabulary size"),
-        min_frequency: int = typer.Option(2, help="Minimum token frequency"),
-        max_length: int = typer.Option(512, help="Maximum sequence length"),
+        corpus_path: Path,
+        output_dir: Path,
+        vocab_size: int,
+        min_frequency: int,
+        max_length: int,
     ):
         """Tokenize training corpus using BPE"""
-
+        corpus_path = typer.Argument(..., help="Path to training corpus")
+        output_dir = typer.Option(Path("tokenized"), help="Output directory")
+        vocab_size = typer.Option(30000, help="Vocabulary size")
+        min_frequency = typer.Option(2, help="Minimum token frequency")
+        max_length = typer.Option(512, help="Maximum sequence length")
         result = run_tokenization_pipeline(
             corpus_path=corpus_path,
             output_dir=output_dir,
@@ -499,7 +498,8 @@ async def main():
     #    file_pattern=r".*\.jsonl\.zst"  # Only download gzipped JSONL files
     # )
 
-    download_result = await download_pile_uncopyrighted_multiproc(
+    download_result = await \
+        download_pile_uncopyrighted_multiproc(
         repo_id="monology/pile-uncopyrighted",
         raw_data_dir=RAWDATA_PATH,
         file_pattern=r".*\.jsonl\.zst",  # Only download compressed JSONL files
@@ -507,7 +507,7 @@ async def main():
         timeout=120,  # Longer timeout for large files
         chunk_size=32768,  # Larger chunk size for faster downloads
         max_files=1,
-        num_parallel_downloads=PARALLEL_EXECS,  # Use 8 parallel threads for the download
+        num_parallel_downloads=PARALLEL_EXECS,  # Use parallel threads for the download
     )
 
     #    download_result = await download_pile_uncopyrighted(
@@ -522,93 +522,7 @@ async def main():
     if download_result.success:
         # Extract PubMed abstracts from downloaded files
         for file_path in download_result.downloaded_files:
-            pubmed_extraction_stats = None
-            clean_tokenize_stats = None
-            bpe_tokenize_stats = None
-
-            pubmed_extraction_stats = await run_pubmed_extraction(
-                input_path=f"{RAWDATA_PATH}/{file_path}",
-                output_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
-                return_objects=False,
-            )
-            if pubmed_extraction_stats:
-                BPE_CORPUS_FILE = f"training_corpus_{PipelineType.PUBMED.value}.txt"
-                logger.info(f"Extracted {pubmed_extraction_stats}")
-                if (
-                    isinstance(pubmed_extraction_stats, ProcessingStats)
-                    and int(f"{pubmed_extraction_stats.output_size_mb}") > 0
-                ):
-                    clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
-                        input_jsonl_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
-                        output_clean_dir=CLEANDATA_PATH,
-                        pipeline_record_type=PipelineType.PUBMED,
-                    )
-                if clean_tokenize_stats and clean_tokenize_stats.success:
-                    logger.info(
-                        f"Produced a training corpus at: {clean_tokenize_stats.final_file}"
-                    )
-                    bpe_tokenize_stats = run_tokenization_pipeline(
-                        corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
-                        output_dir=TRAINDATA_PATH,
-                        pipeline_record_type=PipelineType.PUBMED,
-                    )
-                    logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
-
-            github_extraction_stats = await run_github_extraction(
-                input_path=f"{RAWDATA_PATH}/{file_path}",
-                output_path=f"{PRECLEANDATA_PATH}/{GITHUB_EXTRACT_FILE}",
-                return_objects=False,
-            )
-            if github_extraction_stats:
-                BPE_CORPUS_FILE = f"training_corpus_{PipelineType.GITHUB.value}.txt"
-                logger.info(f"Extracted {github_extraction_stats}")
-                if (
-                    isinstance(github_extraction_stats, ProcessingStats)
-                    and int(f"{github_extraction_stats.output_size_mb}") > 0
-                ):
-                    clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
-                        input_jsonl_path=f"{PRECLEANDATA_PATH}/{GITHUB_EXTRACT_FILE}",
-                        output_clean_dir=CLEANDATA_PATH,
-                        pipeline_record_type=PipelineType.GITHUB,
-                    )
-                if clean_tokenize_stats and clean_tokenize_stats.success:
-                    logger.info(
-                        f"Produced a training corpus at: {clean_tokenize_stats.final_file}"
-                    )
-                    bpe_tokenize_stats = run_tokenization_pipeline(
-                        corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
-                        output_dir=TRAINDATA_PATH,
-                        pipeline_record_type=PipelineType.GITHUB,
-                    )
-                    logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
-
-            wiki_extraction_stats = await run_wikipedia_extraction(
-                input_path=f"{RAWDATA_PATH}/{file_path}",
-                output_path=f"{PRECLEANDATA_PATH}/{WIKI_EXTRACT_FILE}",
-                return_objects=False,
-            )
-            if wiki_extraction_stats:
-                BPE_CORPUS_FILE = f"training_corpus_{PipelineType.WIKI.value}.txt"
-                logger.info(f"Extracted {wiki_extraction_stats}")
-                if (
-                    isinstance(wiki_extraction_stats, ProcessingStats)
-                    and int(f"{wiki_extraction_stats.output_size_mb}") > 0
-                ):
-                    clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
-                        input_jsonl_path=f"{PRECLEANDATA_PATH}/{WIKI_EXTRACT_FILE}",
-                        output_clean_dir=CLEANDATA_PATH,
-                        pipeline_record_type=PipelineType.WIKI,
-                    )
-                if clean_tokenize_stats and clean_tokenize_stats.success:
-                    logger.info(
-                        f"Produced a training corpus at: {clean_tokenize_stats.final_file}"
-                    )
-                    bpe_tokenize_stats = run_tokenization_pipeline(
-                        corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
-                        output_dir=TRAINDATA_PATH,
-                        pipeline_record_type=PipelineType.WIKI,
-                    )
-                    logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
+            await zstd_extractor(file_path)
     else:
         logger.error(f"Download failed: {download_result.message}")
 
@@ -618,27 +532,122 @@ async def main():
         return_objects=False,
     )
     if web_extraction_stats:
-        BPE_CORPUS_FILE = f"training_corpus_{PipelineType.WEB.value}.txt"
-        logger.info(f"Extracted {web_extraction_stats}")
-        if (
+        stream_extractor(web_extraction_stats)
+
+def stream_extractor(web_extraction_stats):
+    BPE_CORPUS_FILE = f"training_corpus_{PipelineType.WEB.value}.txt"
+    logger.info(f"Extracted {web_extraction_stats}")
+    if (
             isinstance(web_extraction_stats, ProcessingStats)
             and int(f"{web_extraction_stats.output_size_mb}") > 0
         ):
-            clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
+        clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
                 input_jsonl_path=f"{PRECLEANDATA_PATH}/{WEB_EXTRACT_FILE}",
                 output_clean_dir=CLEANDATA_PATH,
                 pipeline_record_type=PipelineType.WEB,
             )
-            if clean_tokenize_stats and clean_tokenize_stats.success:
-                logger.info(
+        if clean_tokenize_stats and clean_tokenize_stats.success:
+            logger.info(
                     f"Produced a training corpus at: {clean_tokenize_stats.final_file}"
                 )
-                bpe_tokenize_stats = run_tokenization_pipeline(
+            bpe_tokenize_stats = run_tokenization_pipeline(
                     corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
                     output_dir=TRAINDATA_PATH,
                     pipeline_record_type=PipelineType.WEB,
                 )
-                logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
+            logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
+
+async def zstd_extractor(file_path):
+    pubmed_extraction_stats = None
+    clean_tokenize_stats = None
+    bpe_tokenize_stats = None
+
+    pubmed_extraction_stats = await run_pubmed_extraction(
+                input_path=f"{RAWDATA_PATH}/{file_path}",
+                output_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
+                return_objects=False,
+            )
+    if pubmed_extraction_stats:
+        BPE_CORPUS_FILE = f"training_corpus_{PipelineType.PUBMED.value}.txt"
+        logger.info(f"Extracted {pubmed_extraction_stats}")
+        if (
+                    isinstance(pubmed_extraction_stats, ProcessingStats)
+                    and int(f"{pubmed_extraction_stats.output_size_mb}") > 0
+                ):
+            clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
+                        input_jsonl_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
+                        output_clean_dir=CLEANDATA_PATH,
+                        pipeline_record_type=PipelineType.PUBMED,
+                    )
+        if clean_tokenize_stats and clean_tokenize_stats.success:
+            logger.info(
+                        f"Produced a training corpus at: \
+                        {clean_tokenize_stats.final_file}"
+                    )
+            bpe_tokenize_stats = run_tokenization_pipeline(
+                        corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
+                        output_dir=TRAINDATA_PATH,
+                        pipeline_record_type=PipelineType.PUBMED,
+                    )
+            logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
+
+    github_extraction_stats = await run_github_extraction(
+                input_path=f"{RAWDATA_PATH}/{file_path}",
+                output_path=f"{PRECLEANDATA_PATH}/{GITHUB_EXTRACT_FILE}",
+                return_objects=False,
+            )
+    if github_extraction_stats:
+        BPE_CORPUS_FILE = f"training_corpus_{PipelineType.GITHUB.value}.txt"
+        logger.info(f"Extracted {github_extraction_stats}")
+        if (
+                    isinstance(github_extraction_stats, ProcessingStats)
+                    and int(f"{github_extraction_stats.output_size_mb}") > 0
+                ):
+            clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
+                        input_jsonl_path=f"{PRECLEANDATA_PATH}/{GITHUB_EXTRACT_FILE}",
+                        output_clean_dir=CLEANDATA_PATH,
+                        pipeline_record_type=PipelineType.GITHUB,
+                    )
+        if clean_tokenize_stats and clean_tokenize_stats.success:
+            logger.info(
+                        f"Produced a training corpus at: \
+                        {clean_tokenize_stats.final_file}"
+                    )
+            bpe_tokenize_stats = run_tokenization_pipeline(
+                        corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
+                        output_dir=TRAINDATA_PATH,
+                        pipeline_record_type=PipelineType.GITHUB,
+                    )
+            logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
+
+    wiki_extraction_stats = await run_wikipedia_extraction(
+                input_path=f"{RAWDATA_PATH}/{file_path}",
+                output_path=f"{PRECLEANDATA_PATH}/{WIKI_EXTRACT_FILE}",
+                return_objects=False,
+            )
+    if wiki_extraction_stats:
+        BPE_CORPUS_FILE = f"training_corpus_{PipelineType.WIKI.value}.txt"
+        logger.info(f"Extracted {wiki_extraction_stats}")
+        if (
+                    isinstance(wiki_extraction_stats, ProcessingStats)
+                    and int(f"{wiki_extraction_stats.output_size_mb}") > 0
+                ):
+            clean_tokenize_stats = run_complete_clean_tokenize_pipeline(
+                        input_jsonl_path=f"{PRECLEANDATA_PATH}/{WIKI_EXTRACT_FILE}",
+                        output_clean_dir=CLEANDATA_PATH,
+                        pipeline_record_type=PipelineType.WIKI,
+                    )
+        if clean_tokenize_stats and clean_tokenize_stats.success:
+            logger.info(
+                        f"Produced a training corpus at: \
+                        {clean_tokenize_stats.final_file}"
+                    )
+            bpe_tokenize_stats = run_tokenization_pipeline(
+                        corpus_path=f"{CLEANDATA_PATH}/{BPE_CORPUS_FILE}",
+                        output_dir=TRAINDATA_PATH,
+                        pipeline_record_type=PipelineType.WIKI,
+                    )
+            logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
 
 
 if __name__ == "__main__":

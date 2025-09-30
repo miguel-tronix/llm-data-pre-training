@@ -69,6 +69,7 @@ class PipelineType(str, Enum):
     PUBMED = "pubmed"
     GITHUB = "github"
     WIKI = "wikipedia"
+    WEB = "web_c4"
 
 
 class GitHubRecord(BaseModel):
