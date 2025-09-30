@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator, ValidationInfo, ConfigDict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from enum import Enum
 from datetime import datetime
 import re

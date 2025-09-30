@@ -12,7 +12,7 @@ from utils.pipeline_logger import get_pipeline_logger
 logger = get_pipeline_logger()
 # Try to import ParallelZstdJsonlReader
 try:
-    from .fast_zst_reader import ParallelZstdJsonlReader, process_large_zstd_file_parallel as zstreader
+    from data_prep.fast_zst_reader import  process_large_zstd_file_parallel as zstreader
     HAS_ZSTD_READER = True
 except ImportError:
     HAS_ZSTD_READER = False

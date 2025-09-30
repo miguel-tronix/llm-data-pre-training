@@ -1,22 +1,18 @@
-import asyncio
 import aiofiles
 import json
-import gzip
 import re
 import os
 from typing import List, Optional, Dict, Any, Pattern
-import logging
 from pathlib import Path
 from .configs import ProcessingStats, PubMedAbstract, SourceFormat
 import hashlib
-from enum import Enum
 from utils.pipeline_logger import get_pipeline_logger
 # Configure logging
 logger = get_pipeline_logger()
 
 # Try to import ParallelZstdJsonlReader
 try:
-    from .fast_zst_reader import ParallelZstdJsonlReader, process_large_zstd_file_parallel as zstreader
+    from data_prep.fast_zst_reader import process_large_zstd_file_parallel as zstreader
     HAS_ZSTD_READER = True
 except ImportError:
     HAS_ZSTD_READER = False

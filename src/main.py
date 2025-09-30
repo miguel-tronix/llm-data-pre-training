@@ -1,10 +1,9 @@
 #
 import asyncio
-import logging
 import os
 import typer
 from dotenv import load_dotenv as setenvs
-from typing import Dict, Any, Optional, Union
+from typing import Any, Optional, Union
 from pathlib import Path
 from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 from llm_data_pretraining.data_prep.configs import ProcessingStats, PipelineType
