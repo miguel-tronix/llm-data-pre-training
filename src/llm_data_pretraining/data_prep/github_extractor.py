@@ -13,6 +13,8 @@ from utils.pipeline_logger import get_pipeline_logger
 # setup logging
 logger = get_pipeline_logger()
 
+MIN_SIZE_BYTES = 1024
+
 # Configure logging
 # from src.main import logger
 # Try to import ParallelZstdJsonlReader
@@ -153,7 +155,8 @@ class GitHubRecordExtractor:
                                     source_format=SourceFormat.JSONL,
                                 )
 
-                                # Use model_dump_json() - Pydantic V2 handles Unicode properly
+                                # Use model_dump_json() 
+                                # Pydantic V2 handles Unicode properly
                                 json_size = len(
                                     GitHub_records.model_dump_json().encode("utf-8")
                                 )
@@ -211,11 +214,15 @@ class GitHubRecordExtractor:
         current_size = 0
         if not HAS_ZSTD_READER:
             raise RuntimeError(
-                "ParallelZstdJsonlReader is not available. Cannot process .jsonl.zst files."
+                "ParallelZstdJsonlReader is not available. \
+                Cannot process .jsonl.zst files."
             )
         # Use ParallelZstdJsonlReader for efficient processing
         for data in zstreader(file_path=Path(input_path), num_processes=num_processes):
-            # logger.debug(f"reading {data} from zst file - current output size is {current_size // 1024 // 1024}")
+            # logger.debug(f"reading {data} from zst file - \
+            # current output size is \
+            # {current_size // MIN_SIZE_BYTES // MIN_SIZE_BYTES} \
+            # MB")
             if current_size >= self.target_size:
                 break
             self.processed_count += 1
@@ -249,7 +256,8 @@ class GitHubRecordExtractor:
                                     self.valid_count += 1
                             except Exception as e:
                                 logger.error(
-                                    f"Error processing file with ParallelZstdJsonlReader: {e}"
+                                    f"Error processing file with \
+                                    ParallelZstdJsonlReader: {e}"
                                 )
                                 raise
 
@@ -301,7 +309,8 @@ class GitHubRecordExtractor:
                                 source_format=SourceFormat.JSONL,
                             )
 
-                            # Use model_dump_json() - Pydantic V2 handles Unicode properly
+                            # Use model_dump_json() 
+                            # Pydantic V2 handles Unicode properly
                             json_size = len(
                                 GitHub_records.model_dump_json().encode("utf-8")
                             )
@@ -393,7 +402,8 @@ class GitHubRecordExtractor:
                             source_format=SourceFormat.JSONL,
                         )
 
-                        # Pydantic V2's model_dump_json() handles Unicode properly by default
+                        # Pydantic V2's model_dump_json() 
+                        # handles Unicode properly by default
                         json_line = GitHub_records.model_dump_json() + "\n"
                         line_size = len(json_line.encode("utf-8"))
 
