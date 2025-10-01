@@ -107,7 +107,7 @@ async def download_pile_uncopyrighted_fast(
     Returns:
         DownloadResult with download statistics.
     """
-    # Create configuration with validation, including the parallel download setting
+    # Create DownloadConfig with validation, including the parallel download setting
     config = DownloadConfig(
         repo_id=repo_id,
         raw_data_dir=Path(raw_data_dir),
@@ -122,25 +122,6 @@ async def download_pile_uncopyrighted_fast(
     # Create downloader and execute download
     async with HFDatasetDownloader(config) as downloader:
         return await downloader.download_dataset()
-
-
-# Example of how to run this function:
-#
-# import asyncio
-#
-# async def main():
-#     result = await download_pile_uncopyrighted(
-#         # To test, let's download just one large file from the dataset
-#         file_pattern=r"train/00.jsonl.zst",
-#         max_files=1,
-#         num_parallel_downloads=8 # Use 8 parallel threads for the download
-#     )
-#     print(f"Download successful: {result.success}")
-#     print(f"Message: {result.message}")
-#     print(f"Downloaded files: {result.downloaded_files}")
-#
-# if __name__ == "__main__":
-#     asyncio.run(main())
 
 
 # --- Main Download Function ---
@@ -185,7 +166,7 @@ async def download_pile_uncopyrighted(
         return await downloader.download_dataset()
 
 
-# --- Main Extraction Coroutine ---
+# --- Generate PubMed Abstract JSONL File  ---
 async def run_pubmed_extraction(
     input_path: str, output_path: str | None = None, return_objects: bool = False
 ) -> Any:
@@ -219,7 +200,7 @@ async def run_pubmed_extraction(
         logger.info("Extraction completed successfully!")
         return stats
 
-
+#-- Generate GitHub Records JSONL File  ---
 async def run_github_extraction(
     input_path: str, output_path: str | None = None, return_objects: bool = False
 ) -> Any:
@@ -253,7 +234,7 @@ async def run_github_extraction(
         logger.info("Extraction completed successfully!")
         return stats
 
-
+#-- Generate Wikipedia Records JSONL File  ---
 async def run_wikipedia_extraction(
     input_path: str, output_path: str | None = None, return_objects: bool = False
 ) -> Any:
@@ -287,7 +268,7 @@ async def run_wikipedia_extraction(
         logger.info("Extraction completed successfully!")
         return stats
 
-
+#Generate Web Records JSONL File  ---
 async def run_allenai_extraction(
     input_path: str, output_path: str | None = None, return_objects: bool = False
 ) -> Any:
@@ -347,8 +328,7 @@ async def generate_pubmed_abstracts_jsonl(
         output_path=f"{output_jsonl_path.absolute}",
     )
 
-
-# --- Example Usage with Pydantic V2 ---
+# Main function for transforming JSON recors into clean, deduplicated text files
 def run_complete_clean_tokenize_pipeline(
     input_jsonl_path: str = "path/to/your/pubmed_abstracts.jsonl",
     output_clean_dir: str = "processed_data_pydantic",
@@ -409,7 +389,7 @@ def run_complete_clean_tokenize_pipeline(
     return result
 
 
-# Main function for tokenization pipeline
+# Main function for tokenization pipeline to produce BPE tokenizer and tokenized corpus outputs
 def run_tokenization_pipeline(
     corpus_path: str | Path,
     output_dir: str | Path,
@@ -491,11 +471,7 @@ def add_tokenization_commands(app):
 
 
 async def main():
-    # Download the dataset
-    # download_result = await download_pile_uncopyrighted(
-    #    file_pattern=r".*\.jsonl\.zst"  # Only download gzipped JSONL files
-    # )
-
+    # Download Pile-Uncopyrighted dataset files
     download_result = await \
         download_pile_uncopyrighted_multiproc(
         repo_id="monology/pile-uncopyrighted",
@@ -508,15 +484,6 @@ async def main():
         num_parallel_downloads=PARALLEL_EXECS,  # Use parallel threads for the download
     )
 
-    #    download_result = await download_pile_uncopyrighted(
-    #    repo_id="monology/pile-uncopyrighted",
-    #    raw_data_dir=RAWDATA_PATH,
-    #    file_pattern=r".*\.jsonl\.zst",  # Only download compressed JSONL files
-    #    max_retries=10,                   # More retries for large files
-    #    timeout=120,                     # Longer timeout for large files
-    #    chunk_size=32768,                 # Larger chunk size for faster downloads
-    #    max_files=1
-    #    )
     if download_result.success:
         # Extract PubMed abstracts from downloaded files
         for file_path in download_result.downloaded_files:
