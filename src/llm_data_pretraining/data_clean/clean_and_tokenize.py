@@ -2,18 +2,17 @@ import hashlib
 import os
 import re
 import time
+import jsonlines
 from collections.abc import Iterator
 from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
 from typing import Any
-
-import jsonlines
-from data_prep.fast_zst_reader import ParallelZstdJsonlReader
-from data_prep.configs import PipelineType
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tqdm import tqdm
-from utils.pipeline_logger import get_pipeline_logger
+from llm_data_pretraining.data_prep.fast_zst_reader import ParallelZstdJsonlReader
+from llm_data_pretraining.data_prep.configs import PipelineType
+from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 MIN_SIZE_BYTES = 1024  # Define a default minimum size in bytes
 

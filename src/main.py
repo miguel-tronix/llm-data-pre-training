@@ -1,11 +1,9 @@
 import asyncio
 import os
+import typer
 from pathlib import Path
 from typing import Any
-
-import typer
 from dotenv import load_dotenv as setenvs
-
 from llm_data_pretraining.data_clean.clean_and_tokenize import (
     DeduplicationMethod,
     JsonlDataCleanPipeline,

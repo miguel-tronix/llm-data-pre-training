@@ -2,14 +2,13 @@ import hashlib
 import json
 import os
 import re
+import aiofiles
 from pathlib import Path
 from re import Pattern
 from typing import Any
-
-import aiofiles
-from data_prep.configs import ProcessingStats, SourceFormat, WebRecord
 from datasets import DownloadConfig, load_dataset
-from utils.pipeline_logger import get_pipeline_logger
+from llm_data_pretraining.data_prep.configs import ProcessingStats, SourceFormat, WebRecord
+from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 # Configure logging
 logger = get_pipeline_logger()
@@ -17,7 +16,7 @@ MIN_SIZE_BYTES = 1024
 
 # Try to import ParallelZstdJsonlReader
 try:
-    from data_prep.fast_zst_reader import process_large_zstd_file_parallel as zstreader
+    from llm_data_pretraining.data_prep.fast_zst_reader import process_large_zstd_file_parallel as zstreader
 
     HAS_ZSTD_READER = True
 except ImportError:

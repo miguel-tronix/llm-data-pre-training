@@ -45,11 +45,11 @@ lint = [
 # Enable pycodestyle (E), pyflakes (F), and mccabe (C) codes by default
 lint.select = ["E", "F", "C", "B", "I", "UP", "PL", "RUF"]
 lint.ignore = []
-line-length = 88
 
 # Allow autofix for all enabled rules (when `--fix`) is provided.
 lint.fixable = ["A", "B", "C", "D", "E", "F", "G", "I", "N", "Q", "S", "T", "W", "ANN", "ARG", "BLE", "COM", "DJ", "DTZ", "EM", "ERA", "EXE", "FBT", "ICN", "INP", "ISC", "NPY", "PD", "PGH", "PIE", "PL", "PT", "PTH", "PYI", "RET", "RSE", "RUF", "SIM", "SLF", "TCH", "TID", "TRY", "UP", "YTT"]
 lint.unfixable = []
+line-length = 88
 
 # Exclude a variety of commonly ignored directories.
 exclude = [

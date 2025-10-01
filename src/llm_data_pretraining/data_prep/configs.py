@@ -2,7 +2,6 @@ import re
 from datetime import datetime
 from enum import Enum
 from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 MIN_CHAR_LENGTH = 50  # Minimum number of characters for abstracts

@@ -1,8 +1,6 @@
 import json
-from pathlib import Path
-
 import numpy as np
-from data_clean.clean_and_tokenize import PipelineType
+from pathlib import Path
 from pydantic import BaseModel, Field, field_validator
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
@@ -10,7 +8,9 @@ from tokenizers.pre_tokenizers import Whitespace
 from tokenizers.processors import TemplateProcessing
 from tokenizers.trainers import BpeTrainer
 from tqdm import tqdm
-from utils.pipeline_logger import get_pipeline_logger
+from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
+from llm_data_pretraining.data_clean.clean_and_tokenize import PipelineType
+
 
 # set up logger
 logger = get_pipeline_logger()

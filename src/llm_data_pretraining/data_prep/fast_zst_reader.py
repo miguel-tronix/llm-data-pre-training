@@ -2,13 +2,12 @@ import io
 import json
 import mmap
 import multiprocessing as mp
+import zstandard as zstd
 from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
-
-import zstandard as zstd
-from utils.pipeline_logger import get_pipeline_logger
+from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 # Configure logging
 logger = get_pipeline_logger()

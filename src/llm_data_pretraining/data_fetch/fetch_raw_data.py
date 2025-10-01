@@ -12,7 +12,7 @@ import aiohttp
 import requests
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tqdm import tqdm
-from utils.pipeline_logger import get_pipeline_logger
+from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 logger = get_pipeline_logger()
 
