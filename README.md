@@ -24,7 +24,7 @@ A high-performance pipeline for processing HuggingFace Uncopyrighted Pile record
    ```bash
    curl -LsSf https://raw.githubusercontent.com/miguel-tronix/llm-data-pre-training/refs/heads/master/Dockerfile -o Dockerfile
    # Build optimized image
-   docker build -t llm-data-pretraining:0.1.0 .
+   docker build -t llm-data-pretraining:0.2.0 .
 
    # Run with resource limits
    docker run -it --rm \
@@ -35,7 +35,7 @@ A high-performance pipeline for processing HuggingFace Uncopyrighted Pile record
    -v $(pwd)/cleandata:/opt/llm-data-pretraining/cleandata \
    -v $(pwd)/traindata:/opt/llm-data-pretraining/traindata \
    -v $(pwd)/logs:/opt/llm-data-pretraining/logs \
-   llm-data-pretraining:0.1.0
+   llm-data-pretraining:0.2.0
     ```
 2. **Environment Variables**:
 By default the following environment variables are loaded from a .env file at /opt/llm-data-pretraining/.env
