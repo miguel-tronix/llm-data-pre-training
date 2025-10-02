@@ -264,7 +264,7 @@ class HFDatasetDownloader:
             )
 
             tasks = [
-                loop.run_in_executor(executor, worker_func, start, end)
+                loop.run_in_executor(executor, worker_func, **{"start_byte":start, "end_byte":end})
                 for i, (start, end) in enumerate(ranges)
             ]
 
