@@ -256,10 +256,6 @@ class HFDatasetDownloader:
                 self.config.chunk_size,
                 self.config.max_retries,
                 self.config.timeout,
-                **{
-                    "start_byte": 0,
-                    "end_byte": 0,
-                }
             )
 
             # NOTE: Corrected run_in_executor call with positional arguments
@@ -267,12 +263,9 @@ class HFDatasetDownloader:
                 loop.run_in_executor(
                     executor,
                     worker_func,
-                    local_path.with_name(f"{local_path.name}.part{i}"),
-                    **{
-                        "start_byte":start,
-                        "end_byte":end
-                    },
-                    
+                    start,
+                    end,
+                    local_path.with_name(f"{local_path.name}.part{i}")
                 )
                 for i, (start, end) in enumerate(ranges)
             ]
