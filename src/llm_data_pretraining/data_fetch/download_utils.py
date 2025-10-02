@@ -25,14 +25,15 @@ def _download_chunk_process(
     max_retries: int,
     timeout: int,
     part_path: Path,
-    **kwargs,
+    start_byte: int,
+    end_byte: int,
 ) -> bool:
     """
     Worker function to download a file chunk in a separate process.
     Uses synchronous `requests` for simplicity within the process.
     """
-    start_byte = kwargs.get("start_byte", 0)
-    end_byte = kwargs.get("end_byte", 0)
+   #start_byte = kwargs.get("start_byte", 0)
+   # end_byte = kwargs.get("end_byte", 0)
     for attempt in range(max_retries):
         try:
             start_offset = 0
@@ -263,9 +264,9 @@ class HFDatasetDownloader:
                 loop.run_in_executor(
                     executor,
                     worker_func,
+                    local_path.with_name(f"{local_path.name}.part{i}"),
                     start,
                     end,
-                    local_path.with_name(f"{local_path.name}.part{i}")
                 )
                 for i, (start, end) in enumerate(ranges)
             ]
