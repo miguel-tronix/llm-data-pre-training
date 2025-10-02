@@ -265,9 +265,10 @@ class HFDatasetDownloader:
                     worker_func,
                     local_path.with_name(f"{local_path.name}.part{i}"),
                     **{
-                        "start_byte": start,
-                        "end_byte": end
+                        "start_byte":start,
+                        "end_byte":end
                     },
+                    
                 )
                 for i, (start, end) in enumerate(ranges)
             ]
