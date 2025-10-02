@@ -256,6 +256,10 @@ class HFDatasetDownloader:
                 self.config.chunk_size,
                 self.config.max_retries,
                 self.config.timeout,
+                **{
+                    "start_byte": 0,
+                    "end_byte": 0,
+                }
             )
 
             # NOTE: Corrected run_in_executor call with positional arguments
