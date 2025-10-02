@@ -50,12 +50,6 @@ WEB_JSONL_SIZE_MB = 50
 
 logger = get_pipeline_logger()
 
-
-
-# Assuming the previously defined DownloadConfig, DownloadResult,
-# and HFDatasetDownloader classes are in the same file or imported.
-
-
 async def download_pile_uncopyrighted_multiproc(
     repo_id: str = "monology/pile-uncopyrighted",
     raw_data_dir: str = "rawdata",
@@ -306,7 +300,7 @@ async def run_allenai_extraction(
         return stats
 
 
-# New routine specifically for generating pubmed_abstracts.jsonl
+# Generate PubMed Abstracts JSONL File from ZST Parallel Processing
 async def generate_pubmed_abstracts_jsonl(
     input_zst_path: Path, output_jsonl_path: Path, max_abstracts: int | None = None
 ) -> ProcessingStats:
@@ -436,7 +430,7 @@ def run_tokenization_pipeline(
     return result
 
 
-# Integration with your existing Typer CLI
+# Integration with Typer for CLI
 def add_tokenization_commands(app):
     """Add tokenization commands to Typer app"""
 
@@ -485,7 +479,7 @@ async def main():
     )
 
     if download_result.success:
-        # Extract PubMed abstracts from downloaded files
+        # Extract records from downloaded files
         for file_path in download_result.downloaded_files:
             await zstd_extractor(file_path)
     else:
@@ -499,6 +493,7 @@ async def main():
     if web_extraction_stats:
         stream_extractor(web_extraction_stats)
 
+# Stream based extraction
 def stream_extractor(web_extraction_stats):
     BPE_CORPUS_FILE = f"training_corpus_{PipelineType.WEB.value}.txt"
     logger.info(f"Extracted {web_extraction_stats}")
@@ -522,16 +517,19 @@ def stream_extractor(web_extraction_stats):
                 )
             logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
 
+# ZST File based extraction
 async def zstd_extractor(file_path):
     pubmed_extraction_stats = None
     clean_tokenize_stats = None
     bpe_tokenize_stats = None
 
+    # Extract Pubmed abstracts to JSONL
     pubmed_extraction_stats = await run_pubmed_extraction(
                 input_path=f"{RAWDATA_PATH}/{file_path}",
                 output_path=f"{PRECLEANDATA_PATH}/{PUBMED_EXTRACT_FILE}",
                 return_objects=False,
             )
+    # Clean Pubmed abstracts and prepare training corpus
     if pubmed_extraction_stats:
         BPE_CORPUS_FILE = f"training_corpus_{PipelineType.PUBMED.value}.txt"
         logger.info(f"Extracted {pubmed_extraction_stats}")
@@ -544,6 +542,7 @@ async def zstd_extractor(file_path):
                         output_clean_dir=CLEANDATA_PATH,
                         pipeline_record_type=PipelineType.PUBMED,
                     )
+        # Tokenize Pubmed training corpus with BPE tokenizer
         if clean_tokenize_stats and clean_tokenize_stats.success:
             logger.info(
                         f"Produced a training corpus at: \
@@ -555,12 +554,13 @@ async def zstd_extractor(file_path):
                         pipeline_record_type=PipelineType.PUBMED,
                     )
             logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
-
+    # Extract GitHub records to JSONL
     github_extraction_stats = await run_github_extraction(
                 input_path=f"{RAWDATA_PATH}/{file_path}",
                 output_path=f"{PRECLEANDATA_PATH}/{GITHUB_EXTRACT_FILE}",
                 return_objects=False,
             )
+    # Clean GitHub records and prepare training corpus
     if github_extraction_stats:
         BPE_CORPUS_FILE = f"training_corpus_{PipelineType.GITHUB.value}.txt"
         logger.info(f"Extracted {github_extraction_stats}")
@@ -573,6 +573,7 @@ async def zstd_extractor(file_path):
                         output_clean_dir=CLEANDATA_PATH,
                         pipeline_record_type=PipelineType.GITHUB,
                     )
+        # Tokenize GitHub training corpus with BPE tokenizer
         if clean_tokenize_stats and clean_tokenize_stats.success:
             logger.info(
                         f"Produced a training corpus at: \
@@ -584,12 +585,13 @@ async def zstd_extractor(file_path):
                         pipeline_record_type=PipelineType.GITHUB,
                     )
             logger.info(f"{bpe_tokenize_stats.model_dump_json(indent=2)}")
-
+    # Extract Wikipedia articles to JSONL
     wiki_extraction_stats = await run_wikipedia_extraction(
                 input_path=f"{RAWDATA_PATH}/{file_path}",
                 output_path=f"{PRECLEANDATA_PATH}/{WIKI_EXTRACT_FILE}",
                 return_objects=False,
             )
+    # Clean Wikipedia articles and prepare training corpus
     if wiki_extraction_stats:
         BPE_CORPUS_FILE = f"training_corpus_{PipelineType.WIKI.value}.txt"
         logger.info(f"Extracted {wiki_extraction_stats}")
@@ -602,6 +604,7 @@ async def zstd_extractor(file_path):
                         output_clean_dir=CLEANDATA_PATH,
                         pipeline_record_type=PipelineType.WIKI,
                     )
+        # Tokenize Wikipedia training corpus with BPE tokenizer
         if clean_tokenize_stats and clean_tokenize_stats.success:
             logger.info(
                         f"Produced a training corpus at: \
