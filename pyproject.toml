@@ -22,6 +22,7 @@ dependencies = [
     "tokenizers>=0.22.0",
     "typer>=0.17.4",
     "datasets>=4.1.0",
+    "ftfy", # For fixing Unicode and text cleaning
 ]
 
 [project.optional-dependencies]

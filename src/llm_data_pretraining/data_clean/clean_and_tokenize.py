@@ -68,6 +68,9 @@ class PipelineConfig(BaseModel):
     pipeline_type: PipelineType = Field(
         default=PipelineType.PUBMED, description="Type of pipeline"
     )
+    num_processes: int = Field(
+        default=4, ge=1, description="Number of processes for parallel reading"
+    )
 
     @field_validator("input_path")
     @classmethod
@@ -228,7 +231,7 @@ class JsonlDataCleanPipeline:
         if self.config.input_path.suffix == ".zst":
             reader = ParallelZstdJsonlReader(
                 file_path=self.config.input_path,
-                num_processes=4,
+                num_processes=self.config.num_processes,
                 chunk_size=1024 * 1024,
             )
             yield reader.read_parallel()
