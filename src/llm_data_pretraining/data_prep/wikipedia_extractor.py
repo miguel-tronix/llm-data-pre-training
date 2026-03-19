@@ -2,12 +2,18 @@ import hashlib
 import json
 import os
 import re
-import aiofiles
 from pathlib import Path
 from re import Pattern
 from typing import Any
+
+import aiofiles
+
+from llm_data_pretraining.data_prep.configs import (
+    ProcessingStats,
+    SourceFormat,
+    WikiArticle,
+)
 from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
-from llm_data_pretraining.data_prep.configs import ProcessingStats, SourceFormat, WikiArticle
 
 # Configure logging
 logger = get_pipeline_logger()
@@ -15,7 +21,9 @@ MIN_SIZE_BYTES = 1024
 
 # Try to import ParallelZstdJsonlReader
 try:
-    from llm_data_pretraining.data_prep.fast_zst_reader import process_large_zstd_file_parallel as zstreader
+    from llm_data_pretraining.data_prep.fast_zst_reader import (
+        process_large_zstd_file_parallel as zstreader,
+    )
 
     HAS_ZSTD_READER = True
 except ImportError:
@@ -149,13 +157,13 @@ class WikiArticleExtractor:
 
             try:
                 Wiki_articles = WikiArticle(
-                            id=wiki_id,
-                            article_text=abstract,
-                            metadata={"wiki_id": wiki_id},
-                            source_format=SourceFormat.TEXT,
-                        )
+                    id=wiki_id,
+                    article_text=abstract,
+                    metadata={"wiki_id": wiki_id},
+                    source_format=SourceFormat.TEXT,
+                )
 
-                        # Use model_dump_json() - Pydantic V2 handles Unicode properly
+                # Use model_dump_json() - Pydantic V2 handles Unicode properly
                 json_size = len(Wiki_articles.model_dump_json().encode("utf-8"))
 
                 if current_size + json_size > max_size:
@@ -182,17 +190,15 @@ class WikiArticleExtractor:
                         entry_id = data.get("id", self._generate_id(data))
 
                         Wiki_articles = WikiArticle(
-                                    id=entry_id,
-                                    article_text=abstract,
-                                    metadata={"original_data_keys": list(data.keys())},
-                                    source_format=SourceFormat.JSONL,
-                                )
+                            id=entry_id,
+                            article_text=abstract,
+                            metadata={"original_data_keys": list(data.keys())},
+                            source_format=SourceFormat.JSONL,
+                        )
 
-                                # Use model_dump_json() 
-                                # Pydantic V2 handles Unicode properly
-                        json_size = len(
-                                    Wiki_articles.model_dump_json().encode("utf-8")
-                                )
+                        # Use model_dump_json()
+                        # Pydantic V2 handles Unicode properly
+                        json_size = len(Wiki_articles.model_dump_json().encode("utf-8"))
 
                         if current_size + json_size > max_size:
                             break
@@ -301,7 +307,7 @@ class WikiArticleExtractor:
                                 source_format=SourceFormat.JSONL,
                             )
 
-                            # Use model_dump_json() 
+                            # Use model_dump_json()
                             # Pydantic V2 handles Unicode properly
                             json_size = len(
                                 Wiki_articles.model_dump_json().encode("utf-8")
@@ -394,7 +400,7 @@ class WikiArticleExtractor:
                             source_format=SourceFormat.JSONL,
                         )
 
-                        # Pydantic V2's model_dump_json() 
+                        # Pydantic V2's model_dump_json()
                         # handles Unicode properly by default
                         json_line = Wiki_articles.model_dump_json() + "\n"
                         line_size = len(json_line.encode("utf-8"))

@@ -2,11 +2,13 @@ import io
 import json
 import mmap
 import multiprocessing as mp
-import zstandard as zstd
 from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
+
+import zstandard as zstd
+
 from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 # Configure logging
@@ -45,7 +47,7 @@ class ParallelZstdJsonlReader:
                 for start in range(0, file_size, self.chunk_size):
                     end = min(start + self.chunk_size, file_size)
 
-                    # If not at the end, find the next newline 
+                    # If not at the end, find the next newline
                     # to avoid splitting JSON objects
                     if end < file_size:
                         # Look for a newline character near the end of the chunk
@@ -86,8 +88,10 @@ class ParallelZstdJsonlReader:
                         # Parse JSON lines
                         for line in text:
                             if line.strip():  # Skip empty lines
-                                logger.debug(f"decompressed \
-                                {line} from the stream chunk")
+                                logger.debug(
+                                    f"decompressed \
+                                {line} from the stream chunk"
+                                )
                                 try:
                                     data = json.loads(line)
                                     results.append(data)

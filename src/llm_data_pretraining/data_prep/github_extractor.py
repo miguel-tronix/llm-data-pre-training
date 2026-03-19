@@ -1,12 +1,18 @@
 import hashlib
 import json
 import os
-import aiofiles
 import re
 from pathlib import Path
 from re import Pattern
 from typing import Any
-from llm_data_pretraining.data_prep.configs import GitHubRecord, ProcessingStats, SourceFormat
+
+import aiofiles
+
+from llm_data_pretraining.data_prep.configs import (
+    GitHubRecord,
+    ProcessingStats,
+    SourceFormat,
+)
 from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 # setup logging
@@ -18,7 +24,9 @@ MIN_SIZE_BYTES = 1024
 # from src.main import logger
 # Try to import ParallelZstdJsonlReader
 try:
-    from llm_data_pretraining.data_prep.fast_zst_reader import process_large_zstd_file_parallel as zstreader
+    from llm_data_pretraining.data_prep.fast_zst_reader import (
+        process_large_zstd_file_parallel as zstreader,
+    )
 
     HAS_ZSTD_READER = True
 except ImportError:
@@ -154,16 +162,14 @@ class GitHubRecordExtractor:
 
             try:
                 GitHub_records = GitHubRecord(
-                            id=github_id,
-                            code_text=abstract,
-                            metadata={"github_id": github_id},
-                            source_format=SourceFormat.TEXT,
-                        )
+                    id=github_id,
+                    code_text=abstract,
+                    metadata={"github_id": github_id},
+                    source_format=SourceFormat.TEXT,
+                )
 
-                        # Use model_dump_json() - Pydantic V2 handles Unicode properly
-                json_size = len(
-                            GitHub_records.model_dump_json().encode("utf-8")
-                        )
+                # Use model_dump_json() - Pydantic V2 handles Unicode properly
+                json_size = len(GitHub_records.model_dump_json().encode("utf-8"))
 
                 if current_size + json_size > max_size:
                     break
@@ -189,17 +195,17 @@ class GitHubRecordExtractor:
                         entry_id = data.get("id", self._generate_id(data))
 
                         GitHub_records = GitHubRecord(
-                                    id=entry_id,
-                                    code_text=abstract,
-                                    metadata={"original_data_keys": list(data.keys())},
-                                    source_format=SourceFormat.JSONL,
-                                )
+                            id=entry_id,
+                            code_text=abstract,
+                            metadata={"original_data_keys": list(data.keys())},
+                            source_format=SourceFormat.JSONL,
+                        )
 
-                                # Use model_dump_json() 
-                                # Pydantic V2 handles Unicode properly
+                        # Use model_dump_json()
+                        # Pydantic V2 handles Unicode properly
                         json_size = len(
-                                    GitHub_records.model_dump_json().encode("utf-8")
-                                )
+                            GitHub_records.model_dump_json().encode("utf-8")
+                        )
 
                         if current_size + json_size > max_size:
                             break
@@ -314,7 +320,7 @@ class GitHubRecordExtractor:
                                 source_format=SourceFormat.JSONL,
                             )
 
-                            # Use model_dump_json() 
+                            # Use model_dump_json()
                             # Pydantic V2 handles Unicode properly
                             json_size = len(
                                 GitHub_records.model_dump_json().encode("utf-8")
@@ -407,7 +413,7 @@ class GitHubRecordExtractor:
                             source_format=SourceFormat.JSONL,
                         )
 
-                        # Pydantic V2's model_dump_json() 
+                        # Pydantic V2's model_dump_json()
                         # handles Unicode properly by default
                         json_line = GitHub_records.model_dump_json() + "\n"
                         line_size = len(json_line.encode("utf-8"))

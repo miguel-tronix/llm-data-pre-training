@@ -12,6 +12,7 @@ import aiohttp
 import requests
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tqdm import tqdm
+
 from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 logger = get_pipeline_logger()
@@ -24,16 +25,15 @@ def _download_chunk_process(
     chunk_size: int,
     max_retries: int,
     timeout: int,
-    part_path: Path,
-    start_byte: int,
-    end_byte: int,
+    **kwargs,
 ) -> bool:
     """
     Worker function to download a file chunk in a separate process.
     Uses synchronous `requests` for simplicity within the process.
     """
-   #start_byte = kwargs.get("start_byte", 0)
-   # end_byte = kwargs.get("end_byte", 0)
+    start_byte = kwargs.get("start_byte", 0)
+    end_byte = kwargs.get("end_byte", 0)
+    part_path = kwargs.get("part_path", "")
     for attempt in range(max_retries):
         try:
             start_offset = 0
@@ -134,9 +134,7 @@ class DownloadResult(BaseModel):
     downloaded_files: list[str] = Field(
         default_factory=list, description="List of successfully downloaded file paths"
     )
-    message: str | None = Field(
-        None, description="Additional message or error details"
-    )
+    message: str | None = Field(None, description="Additional message or error details")
 
     @model_validator(mode="after")
     def validate_counts(self):
@@ -288,7 +286,7 @@ class HFDatasetDownloader:
 
     async def _download_file_single_stream(self, file_info: FileInfo) -> bool:
         file_url = f"https://huggingface.co/datasets/{self.config.repo_id}/resolve/main/{file_info.path}"
-        local_path : Path = self.config.raw_data_dir / file_info.path
+        local_path: Path = self.config.raw_data_dir / file_info.path
         if self.session is None:
             raise Exception("No session available")
         local_path.parent.mkdir(parents=True, exist_ok=True)

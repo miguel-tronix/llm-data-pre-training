@@ -12,6 +12,7 @@ import aiohttp
 import requests
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tqdm import tqdm
+
 from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 logger = get_pipeline_logger()
@@ -25,7 +26,6 @@ def _download_chunk_process(
     max_retries: int,
     timeout: int,
     **kwargs,
-    
 ) -> bool:
     """
     Worker function to download a file chunk in a separate process.
@@ -138,9 +138,7 @@ class DownloadResult(BaseModel):
     downloaded_files: list[str] = Field(
         default_factory=list, description="List of successfully downloaded file paths"
     )
-    message: str | None = Field(
-        None, description="Additional message or error details"
-    )
+    message: str | None = Field(None, description="Additional message or error details")
 
     @model_validator(mode="after")
     def validate_counts(self):
@@ -264,7 +262,9 @@ class HFDatasetDownloader:
             )
 
             tasks = [
-                loop.run_in_executor(executor, worker_func, **{"start_byte":start, "end_byte":end})
+                loop.run_in_executor(
+                    executor, worker_func, **{"start_byte": start, "end_byte": end}
+                )
                 for i, (start, end) in enumerate(ranges)
             ]
 
