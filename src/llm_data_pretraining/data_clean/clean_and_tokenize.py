@@ -240,7 +240,7 @@ class JsonlDataCleanPipeline:
             yield reader.read_parallel()
         else:
             with jsonlines.open(self.config.input_path) as reader:
-                yield reader
+                yield iter(reader)
 
     def clean_text(self, text: str) -> str:
         """Clean and normalize text using Pydantic validation"""
