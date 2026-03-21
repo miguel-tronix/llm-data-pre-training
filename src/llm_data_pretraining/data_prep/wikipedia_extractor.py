@@ -152,7 +152,7 @@ class WikiArticleExtractor:
                                     source_format=SourceFormat.JSONL,
                                 )
 
-                                # Use model_dump_json() 
+                                # Use model_dump_json()
                                 # Pydantic V2 handles Unicode properly
                                 json_size = len(
                                     Wiki_articles.model_dump_json().encode("utf-8")
@@ -298,7 +298,7 @@ class WikiArticleExtractor:
                                 source_format=SourceFormat.JSONL,
                             )
 
-                            # Use model_dump_json() 
+                            # Use model_dump_json()
                             # Pydantic V2 handles Unicode properly
                             json_size = len(
                                 Wiki_articles.model_dump_json().encode("utf-8")
@@ -391,7 +391,7 @@ class WikiArticleExtractor:
                             source_format=SourceFormat.JSONL,
                         )
 
-                        # Pydantic V2's model_dump_json() 
+                        # Pydantic V2's model_dump_json()
                         # handles Unicode properly by default
                         json_line = Wiki_articles.model_dump_json() + "\n"
                         line_size = len(json_line.encode("utf-8"))

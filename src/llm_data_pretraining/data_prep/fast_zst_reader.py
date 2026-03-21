@@ -46,7 +46,7 @@ class ParallelZstdJsonlReader:
                 for start in range(0, file_size, self.chunk_size):
                     end = min(start + self.chunk_size, file_size)
 
-                    # If not at the end, find the next newline 
+                    # If not at the end, find the next newline
                     # to avoid splitting JSON objects
                     if end < file_size:
                         # Look for a newline character near the end of the chunk
@@ -87,8 +87,10 @@ class ParallelZstdJsonlReader:
                         # Parse JSON lines
                         for line in text:
                             if line.strip():  # Skip empty lines
-                                logger.debug(f"decompressed \
-                                {line} from the stream chunk")
+                                logger.debug(
+                                    f"decompressed \
+                                {line} from the stream chunk"
+                                )
                                 try:
                                     data = json.loads(line)
                                     results.append(data)

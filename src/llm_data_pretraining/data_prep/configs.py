@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 
 MIN_CHAR_LENGTH = 50  # Minimum number of characters for abstracts
 
+
 class ProcessingStats(BaseModel):
     """Pydantic V2 model for GitHub records"""
 
@@ -69,6 +70,7 @@ class PipelineType(str, Enum):
     PUBMED = "pubmed"
     GITHUB = "github"
     WIKI = "wikipedia"
+    WEB = "web_c4"
 
 
 class GitHubRecord(BaseModel):

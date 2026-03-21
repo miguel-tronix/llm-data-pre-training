@@ -14,6 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from tqdm import tqdm
 from utils.pipeline_logger import get_pipeline_logger
 
+from llm_data_pretraining.data_prep.configs import PipelineType
+
 MIN_SIZE_BYTES = 1024  # Define a default minimum size in bytes
 
 # Configure logging
@@ -41,14 +43,6 @@ class PIIDetectionConfig(BaseModel):
     )
 
     model_config = ConfigDict(extra="forbid")
-
-
-# --- Pydantic V2 Models ---
-class PipelineType(str, Enum):
-    PUBMED = "pubmed"
-    GITHUB = "github"
-    WIKI = "wikipedia"
-    WEB = "web_c4"
 
 
 class PipelineConfig(BaseModel):
@@ -243,7 +237,7 @@ class JsonlDataCleanPipeline:
             yield reader.read_parallel()
         else:
             with jsonlines.open(self.config.input_path) as reader:
-                yield reader
+                yield iter(reader)
 
     def clean_text(self, text: str) -> str:
         """Clean and normalize text using Pydantic validation"""
@@ -256,11 +250,11 @@ class JsonlDataCleanPipeline:
             # Fallback to manual cleaning if validation fails
             text = re.sub(r"\s+", " ", text.strip())
             # text = re.sub(
-            # r'^\s*(ABSTRACT|ABSTRAKT|RESUMEN)\s*[:-\s]*', 
-            # '', 
-            # text, 
+            # r'^\s*(ABSTRACT|ABSTRAKT|RESUMEN)\s*[:-\s]*',
+            # '',
+            # text,
             # flags=re.IGNORECASE
-            #)
+            # )
             text = re.sub(r"\[.*?\]", "", text)
             text = re.sub(r"\(.*?\)", "", text)
             return text.strip()

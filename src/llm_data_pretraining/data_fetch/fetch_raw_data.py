@@ -25,7 +25,6 @@ def _download_chunk_process(
     max_retries: int,
     timeout: int,
     **kwargs,
-    
 ) -> bool:
     """
     Worker function to download a file chunk in a separate process.
@@ -138,9 +137,7 @@ class DownloadResult(BaseModel):
     downloaded_files: list[str] = Field(
         default_factory=list, description="List of successfully downloaded file paths"
     )
-    message: str | None = Field(
-        None, description="Additional message or error details"
-    )
+    message: str | None = Field(None, description="Additional message or error details")
 
     @model_validator(mode="after")
     def validate_counts(self):

@@ -160,7 +160,7 @@ class WebRecordExtractor:
                                     source_format=SourceFormat.JSONL,
                                 )
 
-                                # Use model_dump_json() 
+                                # Use model_dump_json()
                                 # Pydantic V2 handles Unicode properly
                                 json_size = len(
                                     Web_records.model_dump_json().encode("utf-8")
@@ -418,7 +418,7 @@ class WebRecordExtractor:
                                 source_format=SourceFormat.JSONL,
                             )
 
-                            # Use model_dump_json() 
+                            # Use model_dump_json()
                             # Pydantic V2 handles Unicode properly
                             json_size = len(
                                 Web_records.model_dump_json().encode("utf-8")
@@ -515,7 +515,7 @@ class WebRecordExtractor:
                             source_format=SourceFormat.JSONL,
                         )
 
-                        # Pydantic V2's model_dump_json() 
+                        # Pydantic V2's model_dump_json()
                         # handles Unicode properly by default
                         json_line = Web_records.model_dump_json() + "\n"
                         line_size = len(json_line.encode("utf-8"))
