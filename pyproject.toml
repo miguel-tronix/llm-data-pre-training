@@ -80,7 +80,7 @@ exclude = [
 max-complexity = 18
 
 [tool.ruff.lint.isort]
-known-first-party = ["llm_data_pretraining"]
+known-first-party = ["llm_data_pretraining", "llm_data_pretraining.cli", "llm_data_pretraining.cleaning", "llm_data_pretraining.extraction", "llm_data_pretraining.training", "llm_data_pretraining.data_fetch", "llm_data_pretraining.utils"]
 
 [tool.ruff.lint.flake8-quotes]
 inline-quotes = "double"
@@ -105,5 +105,4 @@ format = "ruff format src/"
 lint = "ruff check src/"
 check = "ruff format --check src/ && ruff check src/"
 fix = "ruff check --fix src/ && ruff format src/"
-# Add a Typer-based CLI entry point
-main = "typer src/main.py run"
+pipeline = "llm_data_pretraining.cli.commands:app"

@@ -6,7 +6,7 @@ from typing import Any
 import typer
 from dotenv import load_dotenv as setenvs
 
-from llm_data_pretraining.data_clean.clean_and_tokenize import (
+from llm_data_pretraining.cleaning.clean_and_tokenize import (
     DeduplicationMethod,
     JsonlDataCleanPipeline,
     PIIDetectionConfig,
@@ -20,12 +20,12 @@ from llm_data_pretraining.data_fetch.download_utils import (
     DownloadResult,
     HFDatasetDownloader,
 )
-from llm_data_pretraining.data_prep.allenai_extractor import WebRecordExtractor
-from llm_data_pretraining.data_prep.configs import PipelineType, ProcessingStats
-from llm_data_pretraining.data_prep.github_extractor import GitHubRecordExtractor
-from llm_data_pretraining.data_prep.pubmed_extractor import PubMedAbstractExtractor
-from llm_data_pretraining.data_prep.wikipedia_extractor import WikiArticleExtractor
-from llm_data_pretraining.data_train.tokenization import (
+from llm_data_pretraining.extraction.allenai_extractor import WebRecordExtractor
+from llm_data_pretraining.extraction.configs import PipelineType, ProcessingStats
+from llm_data_pretraining.extraction.github_extractor import GitHubRecordExtractor
+from llm_data_pretraining.extraction.pubmed_extractor import PubMedAbstractExtractor
+from llm_data_pretraining.extraction.wikipedia_extractor import WikiArticleExtractor
+from llm_data_pretraining.training.tokenization import (
     BPETokenizer,
     TokenizationResult,
     TokenizerConfig,

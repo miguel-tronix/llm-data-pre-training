@@ -10,7 +10,7 @@ from tokenizers.processors import TemplateProcessing
 from tokenizers.trainers import BpeTrainer
 from tqdm import tqdm
 
-from llm_data_pretraining.data_clean.clean_and_tokenize import PipelineType
+from llm_data_pretraining.extraction.configs import PipelineType
 from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 # set up logger

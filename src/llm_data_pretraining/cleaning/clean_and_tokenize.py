@@ -12,8 +12,8 @@ import jsonlines
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tqdm import tqdm
 
-from llm_data_pretraining.data_prep.configs import PipelineType
-from llm_data_pretraining.data_prep.fast_zst_reader import ParallelZstdJsonlReader
+from llm_data_pretraining.extraction.configs import PipelineType
+from llm_data_pretraining.extraction.fast_zst_reader import ParallelZstdJsonlReader
 from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 MIN_SIZE_BYTES = 1024  # Define a default minimum size in bytes

@@ -8,7 +8,7 @@ from typing import Any
 
 import aiofiles
 
-from llm_data_pretraining.data_prep.configs import (
+from llm_data_pretraining.extraction.configs import (
     ProcessingStats,
     PubMedAbstract,
     SourceFormat,
@@ -20,7 +20,7 @@ logger = get_pipeline_logger()
 
 # Try to import ParallelZstdJsonlReader
 try:
-    from llm_data_pretraining.data_prep.fast_zst_reader import (
+    from llm_data_pretraining.extraction.fast_zst_reader import (
         process_large_zstd_file_parallel as zstreader,
     )
 

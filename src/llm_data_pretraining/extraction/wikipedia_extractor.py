@@ -7,12 +7,11 @@ from re import Pattern
 from typing import Any
 
 import aiofiles
-from datasets import DownloadConfig, load_dataset
 
-from llm_data_pretraining.data_prep.configs import (
+from llm_data_pretraining.extraction.configs import (
     ProcessingStats,
     SourceFormat,
-    WebRecord,
+    WikiArticle,
 )
 from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
@@ -22,32 +21,30 @@ MIN_SIZE_BYTES = 1024
 
 # Try to import ParallelZstdJsonlReader
 try:
-    from llm_data_pretraining.data_prep.fast_zst_reader import (
+    from llm_data_pretraining.extraction.fast_zst_reader import (
         process_large_zstd_file_parallel as zstreader,
     )
 
     HAS_ZSTD_READER = True
 except ImportError:
     HAS_ZSTD_READER = False
-    zstreader = None
     logger.warning(
         "ParallelZstdJsonlReader not available. Falling back to standard processing."
     )
 
 
 # --- Wikipedia Abstract Extractor ---
-class WebRecordExtractor:
-    """Extract Web scrape records from AllenAI/C4 dataset using Pydantic V2"""
+class WikiArticleExtractor:
+    """Extract Wikipedia records from Pile-Uncopyrighted dataset using Pydantic V2"""
 
     def __init__(
         self,
         use_parallel_zstd: bool = True,
-        use_streaming: bool = False,
         num_processes: int = 1,
         file_size_mb: int = 20,
     ):
-        self.WebRecord_pattern: Pattern[str] = re.compile(
-            r"C4- (\d+)\nAB  - (.*?)(?=\n[A-Z]{2,4}  -|\n\n|\Z)", re.DOTALL
+        self.WikiArticle_pattern: Pattern[str] = re.compile(
+            r"Wikipedia- (\d+)\nAB  - (.*?)(?=\n[A-Z]{2,4}  -|\n\n|\Z)", re.DOTALL
         )
         self.target_size: int = (
             file_size_mb * 1024 * 1024 * num_processes
@@ -57,13 +54,12 @@ class WebRecordExtractor:
         self.invalid_count: int = 0
         self.num_processes: int = num_processes
         self.use_parallel_zstd = use_parallel_zstd and HAS_ZSTD_READER
-        self.use_streaming = use_streaming
 
     async def extract_articles_to_file(
         self, input_path: str, output_path: str
     ) -> ProcessingStats:
         """
-        Extract Web records and save to JSONL file
+        Extract Wikipedia records and save to JSONL file
 
         Args:
             input_path: Path to input file
@@ -83,9 +79,6 @@ class WebRecordExtractor:
             return await self._process_zstd_with_parallel_reader(
                 input_path, output_path, num_processes=self.num_processes
             )
-
-        if self.use_streaming:
-            return await self._process_dataset_streaming(input_path, output_path)
 
         # Open input file
         input_file = await self._open_input_file(input_path)
@@ -120,7 +113,7 @@ class WebRecordExtractor:
 
     async def extract_articles_to_memory(
         self, input_path: str, max_size: int | None = None
-    ) -> list[WebRecord]:
+    ) -> list[WikiArticle]:
         """
         Extract Wikipedia articles and return as list of Pydantic objects
 
@@ -129,7 +122,7 @@ class WebRecordExtractor:
             max_size: Maximum size in bytes (defaults to target_size)
 
         Returns:
-            List of WebRecord objects
+            List of WikiArticle objects
         """
         max_size = max_size or self.target_size
         current_size = 0
@@ -150,7 +143,6 @@ class WebRecordExtractor:
                 await self._read_jsonl(max_size, current_size, records, input_file)
             else:
                 await self._read_text(max_size, current_size, records, input_file)
-
         finally:
             await input_file.close()
 
@@ -158,28 +150,26 @@ class WebRecordExtractor:
 
     async def _read_text(self, max_size, current_size, records, input_file):
         content = await input_file.read()
-        matches = self.WebRecord_pattern.findall(content)
+        matches = self.WikiArticle_pattern.findall(content)
 
         for wiki_id, abstract in matches:
             self.processed_count += 1
 
             try:
-                Web_records = WebRecord(
+                Wiki_articles = WikiArticle(
                     id=wiki_id,
-                    web_text=abstract,
-                    timestamp=None,
-                    url="",
+                    article_text=abstract,
                     metadata={"wiki_id": wiki_id},
                     source_format=SourceFormat.TEXT,
                 )
 
                 # Use model_dump_json() - Pydantic V2 handles Unicode properly
-                json_size = len(Web_records.model_dump_json().encode("utf-8"))
+                json_size = len(Wiki_articles.model_dump_json().encode("utf-8"))
 
                 if current_size + json_size > max_size:
                     break
 
-                records.append(Web_records)
+                records.append(Wiki_articles)
                 current_size += json_size
                 self.valid_count += 1
 
@@ -194,73 +184,61 @@ class WebRecordExtractor:
             try:
                 data = json.loads(line)
 
-                if isinstance(data, dict) and self._is_WebRecord_entry(data):
+                if self._is_WikiArticle_entry(data):
                     abstract = self._extract_articles_from_json(data)
                     if abstract:
                         entry_id = data.get("id", self._generate_id(data))
 
-                        Web_records = WebRecord(
+                        Wiki_articles = WikiArticle(
                             id=entry_id,
-                            web_text=abstract,
-                            timestamp=data.get("timestamp", ""),
-                            url=data.get("url", ""),
+                            article_text=abstract,
                             metadata={"original_data_keys": list(data.keys())},
                             source_format=SourceFormat.JSONL,
                         )
 
                         # Use model_dump_json()
                         # Pydantic V2 handles Unicode properly
-                        json_size = len(Web_records.model_dump_json().encode("utf-8"))
+                        json_size = len(Wiki_articles.model_dump_json().encode("utf-8"))
 
                         if current_size + json_size > max_size:
                             break
 
-                        records.append(Web_records)
+                        records.append(Wiki_articles)
                         current_size += json_size
                         self.valid_count += 1
 
             except Exception:
                 self.invalid_count += 1
                 continue
-        return current_size
 
     async def _process_zstd_with_parallel_reader(
         self, input_path: str, output_path: str, num_processes: int = 1
     ) -> ProcessingStats:
         """Process .jsonl.zst files using ParallelZstdJsonlReader"""
         current_size = 0
-        if not HAS_ZSTD_READER:
-            raise RuntimeError("ParallelZstdJsonlReader not available.")
         # Use ParallelZstdJsonlReader for efficient processing
-        if zstreader is None:
-            raise RuntimeError(
-                "ParallelZstdJsonlReader is not available. \
-                Cannot process .jsonl.zst files."
-            )
         for data in zstreader(file_path=Path(input_path), num_processes=num_processes):
-            # logger.debug(f"reading {data} from zst file -\
+            # logger.debug(f"reading {data} from zst file - \
             # current output size is \
-            # {current_size // MIN_SIZE_BYTES // MIN_SIZE_BYTES}")
+            # {current_size // MIN_SIZE_BYTES // MIN_SIZE_BYTES}MB")
             if current_size >= self.target_size:
                 break
             self.processed_count += 1
 
             try:
-                if isinstance(data, dict) and self._is_WebRecord_entry(data):
+                if self._is_WikiArticle_entry(data):
                     abstract = self._extract_articles_from_json(data)
                     if abstract:
                         entry_id = data.get("id", self._generate_id(data))
 
-                        Web_records = WebRecord(
+                        Wiki_articles = WikiArticle(
                             id=entry_id,
-                            web_text=abstract,
-                            timestamp=data.get("timestamp", ""),
-                            url=data.get("url", ""),
+                            article_text=abstract,
                             metadata={"original_data_keys": list(data.keys())},
                             source_format=SourceFormat.JSONL,
                         )
                         # Use model_dump_json() - Pydantic V2 handles Unicode properly
-                        json_line = Web_records.model_dump_json() + "\n"
+                        json_line = Wiki_articles.model_dump_json() + "\n"
                         line_size = len(json_line.encode("utf-8"))
 
                         async with aiofiles.open(
@@ -304,128 +282,27 @@ class WebRecordExtractor:
             output_size_mb=current_size // 1024 // 1024,
         )
 
-    async def _process_dataset_streaming(
-        self, input_path: str, output_path: str
-    ) -> ProcessingStats:
-        """Process dataset in streaming mode to minimize memory usage"""
-        current_size = 0
-
-        dataset = load_dataset(
-            input_path,
-            "en",
-            download_config=DownloadConfig(
-                cache_dir="./.cache",
-                max_retries=3,
-                force_download=False,
-                resume_download=True,
-                extract_compressed_file=True,
-            ),
-            download_mode="force_redownload",
-            split="train",
-            streaming=True,
-        )
-
-        current_size = 0
-        record_count = 0
-
-        # Ensure output directory exists
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-        for line in dataset:
-            if current_size >= self.target_size:
-                break
-            data = json.loads(line) if isinstance(line, str) else line
-            logger.debug(
-                f"reading {data} from dataset stream - \
-                current output size is \
-                {current_size // MIN_SIZE_BYTES // MIN_SIZE_BYTES} MB"
-            )
-            try:
-                if isinstance(data, dict) and self._is_WebRecord_entry(data):
-                    abstract = self._extract_articles_from_json(data)
-                    if abstract:
-                        entry_id = data.get("id", self._generate_id(data))
-
-                        Web_records = WebRecord(
-                            id=entry_id,
-                            web_text=abstract,
-                            timestamp=data.get("timestamp", ""),
-                            url=data.get("url", ""),
-                            metadata={"original_data_keys": list(data.keys())},
-                            source_format=SourceFormat.JSONL,
-                        )
-                        # Use model_dump_json() - Pydantic V2 handles Unicode properly
-                        json_line = Web_records.model_dump_json() + "\n"
-                        line_size = len(json_line.encode("utf-8"))
-
-                        async with aiofiles.open(
-                            output_path, "a", encoding="utf-8"
-                        ) as output_file:
-                            try:
-                                # logger.debug(f"writing {line_size} to file")
-                                current_size = (
-                                    os.fstat(output_file.fileno()).st_size + line_size
-                                )
-                                if current_size <= self.target_size:
-                                    await output_file.write(json_line)
-                                    self.valid_count += 1
-                            except Exception as e:
-                                logger.error(
-                                    f"Error processing file with \
-                                    ParallelZstdJsonlReader: {e}"
-                                )
-                                raise
-
-                        if self.valid_count % 1000 == 0:
-                            logger.info(
-                                f"Extracted {self.valid_count} records, "
-                                f"current size: {current_size // 1024 // 1024}MB"
-                            )
-
-            except Exception as e:
-                self.invalid_count += 1
-                logger.debug(f"Invalid abstract: {e}")
-                continue
-            record_count += 1
-            self.processed_count += 1
-
-        print("completed web records extraction.")
-
-        return ProcessingStats(
-            processed=self.processed_count,
-            valid=self.valid_count,
-            invalid=self.invalid_count,
-            output_size_mb=current_size // 1024 // 1024,
-        )
-
     async def _process_zstd_to_memory_with_parallel_reader(
         self, input_path: str, max_size: int
-    ) -> list[WebRecord]:
+    ) -> list[WikiArticle]:
         """Process .jsonl.zst files to memory using ParallelZstdJsonlReader"""
         current_size = 0
         records = []
 
         try:
             # Use ParallelZstdJsonlReader for efficient processing
-            if zstreader is None:
-                raise RuntimeError(
-                    "ParallelZstdJsonlReader is not available. \
-                    Cannot process .jsonl.zst files."
-                )
             for data in zstreader(file_path=Path(input_path), num_processes=4):
                 # logger.debug(f"read {data} from zst")
                 self.processed_count += 1
                 try:
-                    if self._is_WebRecord_entry(data):
+                    if self._is_WikiArticle_entry(data):
                         abstract = self._extract_articles_from_json(data)
                         if abstract:
                             entry_id = data.get("id", self._generate_id(data))
 
-                            Web_records = WebRecord(
+                            Wiki_articles = WikiArticle(
                                 id=entry_id,
-                                web_text=abstract,
-                                timestamp=data.get("timestamp", ""),
-                                url=data.get("url", ""),
+                                article_text=abstract,
                                 metadata={"original_data_keys": list(data.keys())},
                                 source_format=SourceFormat.JSONL,
                             )
@@ -433,13 +310,13 @@ class WebRecordExtractor:
                             # Use model_dump_json()
                             # Pydantic V2 handles Unicode properly
                             json_size = len(
-                                Web_records.model_dump_json().encode("utf-8")
+                                Wiki_articles.model_dump_json().encode("utf-8")
                             )
 
                             if current_size + json_size > max_size:
                                 break
 
-                            records.append(Web_records)
+                            records.append(Wiki_articles)
                             current_size += json_size
                             self.valid_count += 1
 
@@ -463,23 +340,21 @@ class WebRecordExtractor:
     async def _process_text(self, input_file, output_file, current_size):
         """Process text format files with Wikipedia content"""
         content = await input_file.read()
-        matches = self.WebRecord_pattern.findall(content)
+        matches = self.WikiArticle_pattern.findall(content)
 
         for wiki_id, abstract in matches:
             self.processed_count += 1
 
             try:
-                Web_records = WebRecord(
+                Wiki_articles = WikiArticle(
                     id=wiki_id,
-                    web_text=abstract,
-                    timestamp=None,
-                    url="",
+                    article_text=abstract,
                     metadata={"wikipediaid": wiki_id},
                     source_format=SourceFormat.TEXT,
                 )
 
                 # Pydantic V2's model_dump_json() handles Unicode properly by default
-                json_line = Web_records.model_dump_json() + "\n"
+                json_line = Wiki_articles.model_dump_json() + "\n"
                 line_size = len(json_line.encode("utf-8"))
 
                 if current_size + line_size > self.target_size:
@@ -513,23 +388,21 @@ class WebRecordExtractor:
             try:
                 data = json.loads(line)
 
-                if self._is_WebRecord_entry(data):
+                if self._is_WikiArticle_entry(data):
                     abstract = self._extract_articles_from_json(data)
                     if abstract:
                         entry_id = data.get("id", self._generate_id(data))
 
-                        Web_records = WebRecord(
+                        Wiki_articles = WikiArticle(
                             id=entry_id,
-                            web_text=abstract,
-                            timestamp=data.get("timestamp", ""),
-                            url=data.get("url", ""),
+                            article_text=abstract,
                             metadata={"original_data_keys": list(data.keys())},
                             source_format=SourceFormat.JSONL,
                         )
 
                         # Pydantic V2's model_dump_json()
                         # handles Unicode properly by default
-                        json_line = Web_records.model_dump_json() + "\n"
+                        json_line = Wiki_articles.model_dump_json() + "\n"
                         line_size = len(json_line.encode("utf-8"))
 
                         if current_size + line_size > self.target_size:
@@ -559,17 +432,17 @@ class WebRecordExtractor:
             f"total size: {current_size / 1024 / 1024:.2f}MB"
         )
 
-    def _is_WebRecord_entry(self, data: dict[str, Any]) -> bool:
-        """Check if the entry is a web scrape"""
-        text = ",".join(data.keys()).lower()
-        if any(keyword in text for keyword in ["text", "url", "timestamp"]):
+    def _is_WikiArticle_entry(self, data: dict[str, Any]) -> bool:
+        """Check if the entry is a Wikipedia abstract"""
+        text = str(data.get("meta", "").get("pile_set_name")).lower()
+        if any(keyword in text for keyword in ["Wikipedia", "wiki", "wikipedia"]):
             return True
 
         return False
 
     def _extract_articles_from_json(self, data: dict[str, Any]) -> str | None:
         """Extract abstract text from JSON data"""
-        possible_fields = ["web_text", "text", "content", "body", "url"]
+        possible_fields = ["abstract", "text", "content", "body", "article_text"]
 
         for field in possible_fields:
             if data.get(field):

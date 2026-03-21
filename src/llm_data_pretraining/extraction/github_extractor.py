@@ -8,43 +8,47 @@ from typing import Any
 
 import aiofiles
 
-from llm_data_pretraining.data_prep.configs import (
+from llm_data_pretraining.extraction.configs import (
+    GitHubRecord,
     ProcessingStats,
     SourceFormat,
-    WikiArticle,
 )
 from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
-# Configure logging
+# setup logging
 logger = get_pipeline_logger()
+
 MIN_SIZE_BYTES = 1024
 
+# Configure logging
+# from src.main import logger
 # Try to import ParallelZstdJsonlReader
 try:
-    from llm_data_pretraining.data_prep.fast_zst_reader import (
+    from llm_data_pretraining.extraction.fast_zst_reader import (
         process_large_zstd_file_parallel as zstreader,
     )
 
     HAS_ZSTD_READER = True
 except ImportError:
     HAS_ZSTD_READER = False
+    zstreader = None
     logger.warning(
         "ParallelZstdJsonlReader not available. Falling back to standard processing."
     )
 
 
-# --- Wikipedia Abstract Extractor ---
-class WikiArticleExtractor:
-    """Extract Wikipedia records from Pile-Uncopyrighted dataset using Pydantic V2"""
+# --- GitHub Abstract Extractor ---
+class GitHubRecordExtractor:
+    """Extract GitHub records from Pile-Uncopyrighted dataset using Pydantic V2"""
 
     def __init__(
         self,
         use_parallel_zstd: bool = True,
         num_processes: int = 1,
-        file_size_mb: int = 20,
+        file_size_mb: int = 50,
     ):
-        self.WikiArticle_pattern: Pattern[str] = re.compile(
-            r"Wikipedia- (\d+)\nAB  - (.*?)(?=\n[A-Z]{2,4}  -|\n\n|\Z)", re.DOTALL
+        self.GitHub_pattern: Pattern[str] = re.compile(
+            r"GITHUB- (\d+)\nAB  - (.*?)(?=\n[A-Z]{2,4}  -|\n\n|\Z)", re.DOTALL
         )
         self.target_size: int = (
             file_size_mb * 1024 * 1024 * num_processes
@@ -55,11 +59,11 @@ class WikiArticleExtractor:
         self.num_processes: int = num_processes
         self.use_parallel_zstd = use_parallel_zstd and HAS_ZSTD_READER
 
-    async def extract_articles_to_file(
+    async def extract_records_to_file(
         self, input_path: str, output_path: str
     ) -> ProcessingStats:
         """
-        Extract Wikipedia records and save to JSONL file
+        Extract GitHub records and save to JSONL file
 
         Args:
             input_path: Path to input file
@@ -89,7 +93,7 @@ class WikiArticleExtractor:
                 if input_path.endswith(".jsonl") or input_path.endswith(".jsonl.gz"):
                     await self._process_jsonl(input_file, output_file, current_size)
                 else:
-                    # Assume it's a text file with Wikipedia format
+                    # Assume it's a text file with GitHub format
                     await self._process_text(input_file, output_file, current_size)
 
             except Exception as e:
@@ -111,18 +115,18 @@ class WikiArticleExtractor:
             output_size_mb=current_size // 1024 // 1024,
         )
 
-    async def extract_articles_to_memory(
+    async def extract_records_to_memory(
         self, input_path: str, max_size: int | None = None
-    ) -> list[WikiArticle]:
+    ) -> list[GitHubRecord]:
         """
-        Extract Wikipedia articles and return as list of Pydantic objects
+        Extract GitHub records and return as list of Pydantic objects
 
         Args:
             input_path: Path to input file
             max_size: Maximum size in bytes (defaults to target_size)
 
         Returns:
-            List of WikiArticle objects
+            List of GitHubRecord objects
         """
         max_size = max_size or self.target_size
         current_size = 0
@@ -143,6 +147,7 @@ class WikiArticleExtractor:
                 await self._read_jsonl(max_size, current_size, records, input_file)
             else:
                 await self._read_text(max_size, current_size, records, input_file)
+
         finally:
             await input_file.close()
 
@@ -150,26 +155,26 @@ class WikiArticleExtractor:
 
     async def _read_text(self, max_size, current_size, records, input_file):
         content = await input_file.read()
-        matches = self.WikiArticle_pattern.findall(content)
+        matches = self.GitHub_pattern.findall(content)
 
-        for wiki_id, abstract in matches:
+        for github_id, abstract in matches:
             self.processed_count += 1
 
             try:
-                Wiki_articles = WikiArticle(
-                    id=wiki_id,
-                    article_text=abstract,
-                    metadata={"wiki_id": wiki_id},
+                GitHub_records = GitHubRecord(
+                    id=github_id,
+                    code_text=abstract,
+                    metadata={"github_id": github_id},
                     source_format=SourceFormat.TEXT,
                 )
 
                 # Use model_dump_json() - Pydantic V2 handles Unicode properly
-                json_size = len(Wiki_articles.model_dump_json().encode("utf-8"))
+                json_size = len(GitHub_records.model_dump_json().encode("utf-8"))
 
                 if current_size + json_size > max_size:
                     break
 
-                records.append(Wiki_articles)
+                records.append(GitHub_records)
                 current_size += json_size
                 self.valid_count += 1
 
@@ -184,26 +189,28 @@ class WikiArticleExtractor:
             try:
                 data = json.loads(line)
 
-                if self._is_WikiArticle_entry(data):
-                    abstract = self._extract_articles_from_json(data)
+                if self._is_GitHub_entry(data):
+                    abstract = self._extract_records_from_json(data)
                     if abstract:
                         entry_id = data.get("id", self._generate_id(data))
 
-                        Wiki_articles = WikiArticle(
+                        GitHub_records = GitHubRecord(
                             id=entry_id,
-                            article_text=abstract,
+                            code_text=abstract,
                             metadata={"original_data_keys": list(data.keys())},
                             source_format=SourceFormat.JSONL,
                         )
 
                         # Use model_dump_json()
                         # Pydantic V2 handles Unicode properly
-                        json_size = len(Wiki_articles.model_dump_json().encode("utf-8"))
+                        json_size = len(
+                            GitHub_records.model_dump_json().encode("utf-8")
+                        )
 
                         if current_size + json_size > max_size:
                             break
 
-                        records.append(Wiki_articles)
+                        records.append(GitHub_records)
                         current_size += json_size
                         self.valid_count += 1
 
@@ -216,29 +223,35 @@ class WikiArticleExtractor:
     ) -> ProcessingStats:
         """Process .jsonl.zst files using ParallelZstdJsonlReader"""
         current_size = 0
+        if not HAS_ZSTD_READER:
+            raise RuntimeError(
+                "ParallelZstdJsonlReader is not available. \
+                Cannot process .jsonl.zst files."
+            )
         # Use ParallelZstdJsonlReader for efficient processing
         for data in zstreader(file_path=Path(input_path), num_processes=num_processes):
             # logger.debug(f"reading {data} from zst file - \
             # current output size is \
-            # {current_size // MIN_SIZE_BYTES // MIN_SIZE_BYTES}MB")
+            # {current_size // MIN_SIZE_BYTES // MIN_SIZE_BYTES} \
+            # MB")
             if current_size >= self.target_size:
                 break
             self.processed_count += 1
 
             try:
-                if self._is_WikiArticle_entry(data):
-                    abstract = self._extract_articles_from_json(data)
+                if self._is_GitHub_entry(data):
+                    abstract = self._extract_records_from_json(data)
                     if abstract:
                         entry_id = data.get("id", self._generate_id(data))
 
-                        Wiki_articles = WikiArticle(
+                        GitHub_records = GitHubRecord(
                             id=entry_id,
-                            article_text=abstract,
+                            code_text=abstract,
                             metadata={"original_data_keys": list(data.keys())},
                             source_format=SourceFormat.JSONL,
                         )
                         # Use model_dump_json() - Pydantic V2 handles Unicode properly
-                        json_line = Wiki_articles.model_dump_json() + "\n"
+                        json_line = GitHub_records.model_dump_json() + "\n"
                         line_size = len(json_line.encode("utf-8"))
 
                         async with aiofiles.open(
@@ -284,7 +297,7 @@ class WikiArticleExtractor:
 
     async def _process_zstd_to_memory_with_parallel_reader(
         self, input_path: str, max_size: int
-    ) -> list[WikiArticle]:
+    ) -> list[GitHubRecord]:
         """Process .jsonl.zst files to memory using ParallelZstdJsonlReader"""
         current_size = 0
         records = []
@@ -295,14 +308,14 @@ class WikiArticleExtractor:
                 # logger.debug(f"read {data} from zst")
                 self.processed_count += 1
                 try:
-                    if self._is_WikiArticle_entry(data):
-                        abstract = self._extract_articles_from_json(data)
+                    if self._is_GitHub_entry(data):
+                        abstract = self._extract_records_from_json(data)
                         if abstract:
                             entry_id = data.get("id", self._generate_id(data))
 
-                            Wiki_articles = WikiArticle(
+                            GitHub_records = GitHubRecord(
                                 id=entry_id,
-                                article_text=abstract,
+                                code_text=abstract,
                                 metadata={"original_data_keys": list(data.keys())},
                                 source_format=SourceFormat.JSONL,
                             )
@@ -310,13 +323,13 @@ class WikiArticleExtractor:
                             # Use model_dump_json()
                             # Pydantic V2 handles Unicode properly
                             json_size = len(
-                                Wiki_articles.model_dump_json().encode("utf-8")
+                                GitHub_records.model_dump_json().encode("utf-8")
                             )
 
                             if current_size + json_size > max_size:
                                 break
 
-                            records.append(Wiki_articles)
+                            records.append(GitHub_records)
                             current_size += json_size
                             self.valid_count += 1
 
@@ -338,23 +351,23 @@ class WikiArticleExtractor:
             return await aiofiles.open(input_path, encoding="utf-8")
 
     async def _process_text(self, input_file, output_file, current_size):
-        """Process text format files with Wikipedia content"""
+        """Process text format files with GitHub content"""
         content = await input_file.read()
-        matches = self.WikiArticle_pattern.findall(content)
+        matches = self.GitHub_pattern.findall(content)
 
-        for wiki_id, abstract in matches:
+        for github_id, abstract in matches:
             self.processed_count += 1
 
             try:
-                Wiki_articles = WikiArticle(
-                    id=wiki_id,
-                    article_text=abstract,
-                    metadata={"wikipediaid": wiki_id},
+                GitHub_records = GitHubRecord(
+                    id=github_id,
+                    code_text=abstract,
+                    metadata={"github_id": github_id},
                     source_format=SourceFormat.TEXT,
                 )
 
                 # Pydantic V2's model_dump_json() handles Unicode properly by default
-                json_line = Wiki_articles.model_dump_json() + "\n"
+                json_line = GitHub_records.model_dump_json() + "\n"
                 line_size = len(json_line.encode("utf-8"))
 
                 if current_size + line_size > self.target_size:
@@ -372,7 +385,7 @@ class WikiArticleExtractor:
 
             except Exception as e:
                 self.invalid_count += 1
-                logger.debug(f"Invalid abstract (Wikipedia: {wiki_id}: {e}")
+                logger.debug(f"Invalid abstract (GITHUB_ID: {github_id}): {e}")
                 continue
 
         logger.info(
@@ -388,21 +401,21 @@ class WikiArticleExtractor:
             try:
                 data = json.loads(line)
 
-                if self._is_WikiArticle_entry(data):
-                    abstract = self._extract_articles_from_json(data)
+                if self._is_GitHub_entry(data):
+                    abstract = self._extract_records_from_json(data)
                     if abstract:
                         entry_id = data.get("id", self._generate_id(data))
 
-                        Wiki_articles = WikiArticle(
+                        GitHub_records = GitHubRecord(
                             id=entry_id,
-                            article_text=abstract,
+                            code_text=abstract,
                             metadata={"original_data_keys": list(data.keys())},
                             source_format=SourceFormat.JSONL,
                         )
 
                         # Pydantic V2's model_dump_json()
                         # handles Unicode properly by default
-                        json_line = Wiki_articles.model_dump_json() + "\n"
+                        json_line = GitHub_records.model_dump_json() + "\n"
                         line_size = len(json_line.encode("utf-8"))
 
                         if current_size + line_size > self.target_size:
@@ -432,25 +445,25 @@ class WikiArticleExtractor:
             f"total size: {current_size / 1024 / 1024:.2f}MB"
         )
 
-    def _is_WikiArticle_entry(self, data: dict[str, Any]) -> bool:
-        """Check if the entry is a Wikipedia abstract"""
+    def _is_GitHub_entry(self, data: dict[str, Any]) -> bool:
+        """Check if the entry is a GitHub abstract"""
         text = str(data.get("meta", "").get("pile_set_name")).lower()
-        if any(keyword in text for keyword in ["Wikipedia", "wiki", "wikipedia"]):
+        if any(keyword in text for keyword in ["github", "git", "repo", "repository"]):
             return True
 
         return False
 
-    def _extract_articles_from_json(self, data: dict[str, Any]) -> str | None:
+    def _extract_records_from_json(self, data: dict[str, Any]) -> str | None:
         """Extract abstract text from JSON data"""
-        possible_fields = ["abstract", "text", "content", "body", "article_text"]
+        possible_fields = ["abstract", "text", "content", "body", "code_text"]
 
         for field in possible_fields:
             if data.get(field):
-                return self._clean_articles(str(data[field]))
+                return self._clean_records(str(data[field]))
 
         return None
 
-    def _clean_articles(self, abstract: str) -> str:
+    def _clean_records(self, abstract: str) -> str:
         """Clean and normalize abstract text"""
         abstract = re.sub(r"\s+", " ", abstract)
         abstract = re.sub(r"^\s*AB\s*-\s*", "", abstract)
