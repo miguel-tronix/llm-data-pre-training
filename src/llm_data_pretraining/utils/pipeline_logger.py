@@ -12,9 +12,12 @@ class PipelineLogger:
             cls._logger.setLevel(logging.DEBUG)
 
             if not cls._logger.handlers:
-                file_handler = logging.FileHandler(
-                    os.getenv("LOG_FILE", "logs/pretraining_pipeline.log")
-                )
+                log_file = os.getenv("LOG_FILE", "logs/pretraining_pipeline.log")
+                log_dir = os.path.dirname(log_file)
+                if log_dir and not os.path.exists(log_dir):
+                    os.makedirs(log_dir, exist_ok=True)
+
+                file_handler = logging.FileHandler(log_file)
                 file_handler.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
                 formatter = logging.Formatter(
