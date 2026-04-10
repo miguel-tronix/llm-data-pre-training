@@ -31,7 +31,7 @@ try:
     HAS_ZSTD_READER = True
 except ImportError:
     HAS_ZSTD_READER = False
-    zstreader = None
+    zstreader = None  # type: ignore[assignment]
     logger.warning(
         "ParallelZstdJsonlReader not available. Falling back to standard processing."
     )
@@ -130,7 +130,7 @@ class GitHubRecordExtractor:
         """
         max_size = max_size or self.target_size
         current_size = 0
-        records = []
+        records: list[GitHubRecord] = []
 
         # Use ParallelZstdJsonlReader if available and requested
         if self.use_parallel_zstd and input_path.endswith(".jsonl.zst"):
@@ -153,7 +153,13 @@ class GitHubRecordExtractor:
 
         return records
 
-    async def _read_text(self, max_size, current_size, records, input_file):
+    async def _read_text(
+        self,
+        max_size: int,
+        current_size: int,
+        records: list[GitHubRecord],
+        input_file: Any,
+    ) -> None:
         content = await input_file.read()
         matches = self.GitHub_pattern.findall(content)
 
@@ -182,7 +188,13 @@ class GitHubRecordExtractor:
                 self.invalid_count += 1
                 continue
 
-    async def _read_jsonl(self, max_size, current_size, records, input_file):
+    async def _read_jsonl(
+        self,
+        max_size: int,
+        current_size: int,
+        records: list[GitHubRecord],
+        input_file: Any,
+    ) -> None:
         for line in input_file:
             self.processed_count += 1
 
@@ -229,6 +241,7 @@ class GitHubRecordExtractor:
                 Cannot process .jsonl.zst files."
             )
         # Use ParallelZstdJsonlReader for efficient processing
+        assert zstreader is not None
         for data in zstreader(file_path=Path(input_path), num_processes=num_processes):
             # logger.debug(f"reading {data} from zst file - \
             # current output size is \
@@ -304,6 +317,7 @@ class GitHubRecordExtractor:
 
         try:
             # Use ParallelZstdJsonlReader for efficient processing
+            assert zstreader is not None
             for data in zstreader(file_path=Path(input_path), num_processes=4):
                 # logger.debug(f"read {data} from zst")
                 self.processed_count += 1
@@ -343,14 +357,16 @@ class GitHubRecordExtractor:
 
         return records
 
-    async def _open_input_file(self, input_path: str):
+    async def _open_input_file(self, input_path: str) -> Any:
         """Open input file with appropriate handler based on extension"""
         if input_path.endswith(".zst"):
             return await aiofiles.open(input_path, encoding="utf-8")
         else:
             return await aiofiles.open(input_path, encoding="utf-8")
 
-    async def _process_text(self, input_file, output_file, current_size):
+    async def _process_text(
+        self, input_file: Any, output_file: Any, current_size: int
+    ) -> None:
         """Process text format files with GitHub content"""
         content = await input_file.read()
         matches = self.GitHub_pattern.findall(content)
@@ -393,7 +409,9 @@ class GitHubRecordExtractor:
             f"total size: {current_size / 1024 / 1024:.2f}MB"
         )
 
-    async def _process_jsonl(self, input_file, output_file, current_size):
+    async def _process_jsonl(
+        self, input_file: Any, output_file: Any, current_size: int
+    ) -> None:
         """Process JSONL format files"""
         async for line in input_file:
             self.processed_count += 1

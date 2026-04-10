@@ -67,16 +67,17 @@ async def download_pile_uncopyrighted_multiproc(
     config = DownloadConfig(
         repo_id=repo_id,
         raw_data_dir=Path(raw_data_dir),
-        max_retries=kwargs.get("max_retries", 3),
-        timeout=kwargs.get("timeout", 30),
+        max_retries=int(kwargs.get("max_retries", 3)),
+        timeout=int(kwargs.get("timeout", 30)),
         file_pattern=file_pattern,
         chunk_size=chunk_size,
         max_files=kwargs.get("max_files", None),
-        num_parallel_downloads=kwargs.get("num_parallel_downloads", 4),
+        num_parallel_downloads=int(kwargs.get("num_parallel_downloads", 4)),
     )
 
     async with HFDatasetDownloader(config) as downloader:
-        return await downloader.download_dataset()
+        result: DownloadResult = await downloader.download_dataset()
+        return result
 
 
 async def download_pile_uncopyrighted_fast(
@@ -111,14 +112,15 @@ async def download_pile_uncopyrighted_fast(
         max_retries=max_retries,
         timeout=timeout,
         file_pattern=file_pattern,
-        chunk_size=kwargs.get("chunk_size", 8192),
+        chunk_size=int(kwargs.get("chunk_size", 8192)),
         max_files=kwargs.get("max_files", 1),
-        num_parallel_downloads=kwargs.get("num_parallel_downloads", 4),
+        num_parallel_downloads=int(kwargs.get("num_parallel_downloads", 4)),
     )
 
     # Create downloader and execute download
     async with HFDatasetDownloader(config) as downloader:
-        return await downloader.download_dataset()
+        result: DownloadResult = await downloader.download_dataset()
+        return result
 
 
 # --- Main Download Function ---
@@ -439,7 +441,7 @@ def run_tokenization_pipeline(
 
 
 # Integration with Typer for CLI
-def add_tokenization_commands(app):
+def add_tokenization_commands(app: typer.Typer) -> typer.Typer:
     """Add tokenization commands to Typer app"""
 
     @app.command()
@@ -449,7 +451,7 @@ def add_tokenization_commands(app):
         vocab_size: int,
         min_frequency: int,
         max_length: int,
-    ):
+    ) -> None:
         """Tokenize training corpus using BPE"""
         corpus_path = typer.Argument(..., help="Path to training corpus")
         output_dir = typer.Option(Path("tokenized"), help="Output directory")
@@ -467,12 +469,10 @@ def add_tokenization_commands(app):
         # Output result as JSON
         typer.echo(result.model_dump_json(indent=2))
 
-        return result
-
     return app
 
 
-async def main():
+async def main() -> None:
     # Download Pile-Uncopyrighted dataset files
     download_result = await download_pile_uncopyrighted_multiproc(
         repo_id="monology/pile-uncopyrighted",
@@ -502,7 +502,7 @@ async def main():
 
 
 # Stream based extraction
-def stream_extractor(web_extraction_stats):
+def stream_extractor(web_extraction_stats: Any) -> None:
     BPE_CORPUS_FILE = f"training_corpus_{PipelineType.WEB.value}.txt"
     logger.info(f"Extracted {web_extraction_stats}")
     if (
@@ -527,7 +527,7 @@ def stream_extractor(web_extraction_stats):
 
 
 # ZST File based extraction
-async def zstd_extractor(file_path):
+async def zstd_extractor(file_path: str) -> None:
     pubmed_extraction_stats = None
     clean_tokenize_stats = None
     bpe_tokenize_stats = None

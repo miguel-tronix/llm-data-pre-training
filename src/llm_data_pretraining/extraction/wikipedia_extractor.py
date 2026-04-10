@@ -126,7 +126,7 @@ class WikiArticleExtractor:
         """
         max_size = max_size or self.target_size
         current_size = 0
-        records = []
+        records: list[WikiArticle] = []
 
         # Use ParallelZstdJsonlReader if available and requested
         if self.use_parallel_zstd and input_path.endswith(".jsonl.zst"):
@@ -148,7 +148,13 @@ class WikiArticleExtractor:
 
         return records
 
-    async def _read_text(self, max_size, current_size, records, input_file):
+    async def _read_text(
+        self,
+        max_size: int,
+        current_size: int,
+        records: list[WikiArticle],
+        input_file: Any,
+    ) -> None:
         content = await input_file.read()
         matches = self.WikiArticle_pattern.findall(content)
 
@@ -177,7 +183,13 @@ class WikiArticleExtractor:
                 self.invalid_count += 1
                 continue
 
-    async def _read_jsonl(self, max_size, current_size, records, input_file):
+    async def _read_jsonl(
+        self,
+        max_size: int,
+        current_size: int,
+        records: list[WikiArticle],
+        input_file: Any,
+    ) -> None:
         for line in input_file:
             self.processed_count += 1
 
@@ -330,14 +342,16 @@ class WikiArticleExtractor:
 
         return records
 
-    async def _open_input_file(self, input_path: str):
+    async def _open_input_file(self, input_path: str) -> Any:
         """Open input file with appropriate handler based on extension"""
         if input_path.endswith(".zst"):
             return await aiofiles.open(input_path, encoding="utf-8")
         else:
             return await aiofiles.open(input_path, encoding="utf-8")
 
-    async def _process_text(self, input_file, output_file, current_size):
+    async def _process_text(
+        self, input_file: Any, output_file: Any, current_size: int
+    ) -> None:
         """Process text format files with Wikipedia content"""
         content = await input_file.read()
         matches = self.WikiArticle_pattern.findall(content)
@@ -380,7 +394,9 @@ class WikiArticleExtractor:
             f"total size: {current_size / 1024 / 1024:.2f}MB"
         )
 
-    async def _process_jsonl(self, input_file, output_file, current_size):
+    async def _process_jsonl(
+        self, input_file: Any, output_file: Any, current_size: int
+    ) -> None:
         """Process JSONL format files"""
         async for line in input_file:
             self.processed_count += 1

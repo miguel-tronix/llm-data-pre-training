@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import jsonlines
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -232,15 +232,15 @@ class JsonlDataCleanPipeline:
     def read_jsonl_file(self) -> Iterator[Iterator[dict[str, Any]]]:
         """Context manager for reading JSONL files"""
         if self.config.input_path.suffix == ".zst":
-            reader = ParallelZstdJsonlReader(
+            zstd_reader = ParallelZstdJsonlReader(
                 file_path=self.config.input_path,
                 num_processes=self.config.num_processes,
                 chunk_size=1024 * 1024,
             )
-            yield reader.read_parallel()
+            yield zstd_reader.read_parallel()
         else:
-            with jsonlines.open(self.config.input_path) as reader:
-                yield iter(reader)
+            with jsonlines.open(self.config.input_path) as jsonl_reader:
+                yield cast(Iterator[dict[str, Any]], jsonl_reader)
 
     def clean_text(self, text: str) -> str:
         """Clean and normalize text using Pydantic validation"""
@@ -447,7 +447,7 @@ class JsonlDataCleanPipeline:
             processing_time=processing_time,
         )
 
-    def prepare_for_tokenization(self, input_file: Path, output_file: Path):
+    def prepare_for_tokenization(self, input_file: Path, output_file: Path) -> None:
         """Prepare the final dataset for tokenization using Pydantic"""
         with jsonlines.open(input_file, "r") as reader:
             with jsonlines.open(output_file, "w") as writer:

@@ -25,6 +25,7 @@ dependencies = [
     "datasets>=4.1.0",
     "ftfy", # For fixing Unicode and text cleaning
     "ruff>=0.15.6",
+    "types-tqdm>=4.67.3.20260408",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +38,8 @@ dev = [
 [dependency-groups]
 dev = [
   { include-group = "lint" },
+  "pandas-stubs>=2.3.3.260113",
+  "types-aiofiles>=25.1.0.20260409",
 ]
 
 lint = [

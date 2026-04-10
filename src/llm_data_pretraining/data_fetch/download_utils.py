@@ -5,6 +5,7 @@ import re
 import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
+from typing import Any
 
 import aiofiles
 import aiofiles.os
@@ -25,7 +26,7 @@ def _download_chunk_process(
     chunk_size: int,
     max_retries: int,
     timeout: int,
-    **kwargs,
+    **kwargs: Any,
 ) -> bool:
     """
     Worker function to download a file chunk in a separate process.
@@ -119,8 +120,8 @@ class DownloadConfig(BaseModel):
 
     @field_validator("raw_data_dir", mode="before")
     @classmethod
-    def validate_raw_data_dir(cls, v):
-        return Path(v) if isinstance(v, str) else v
+    def validate_raw_data_dir(cls, v: object) -> Path:
+        return Path(str(v)) if isinstance(v, str) else v  # type: ignore[return-value]
 
 
 class DownloadResult(BaseModel):
@@ -137,7 +138,7 @@ class DownloadResult(BaseModel):
     message: str | None = Field(None, description="Additional message or error details")
 
     @model_validator(mode="after")
-    def validate_counts(self):
+    def validate_counts(self) -> "DownloadResult":
         if self.total_files != self.success_count + self.failed_count:
             raise ValueError("Total files must equal success_count + failed_count")
         if len(self.downloaded_files) != self.success_count:
@@ -155,13 +156,15 @@ class HFDatasetDownloader:
         self.session: aiohttp.ClientSession | None = None
         self.file_extensions = [".jsonl", ".jsonl.zst", ".jsonl.gz", ".txt", ".zst"]
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "HFDatasetDownloader":
         self.session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=self.config.timeout)
         )
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self, exc_type: object, exc_val: object, exc_tb: object
+    ) -> None:
         if self.session:
             await self.session.close()
 
@@ -202,7 +205,7 @@ class HFDatasetDownloader:
         except Exception:
             return False
 
-    async def _merge_parts(self, final_path: Path, num_parts: int):
+    async def _merge_parts(self, final_path: Path, num_parts: int) -> None:
         logger.info(f"Merging {num_parts} parts for {final_path.name}")
         try:
             async with aiofiles.open(final_path, "wb") as final_file:
@@ -314,7 +317,7 @@ class HFDatasetDownloader:
                 async with self.session.get(file_url, headers=headers) as response:
                     if response.status in (200, 206):
                         mode = "ab" if start_byte > 0 else "wb"
-                        async with aiofiles.open(local_path, mode) as f:
+                        async with aiofiles.open(str(local_path), mode) as f:  # type: ignore[call-overload]
                             async for chunk in response.content.iter_chunked(
                                 self.config.chunk_size
                             ):

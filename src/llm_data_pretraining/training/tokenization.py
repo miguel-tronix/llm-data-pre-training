@@ -3,11 +3,11 @@ from pathlib import Path
 
 import numpy as np
 from pydantic import BaseModel, Field, field_validator
-from tokenizers import Tokenizer
-from tokenizers.models import BPE
-from tokenizers.pre_tokenizers import Whitespace
-from tokenizers.processors import TemplateProcessing
-from tokenizers.trainers import BpeTrainer
+from tokenizers import Tokenizer  # type: ignore[import-untyped]
+from tokenizers.models import BPE  # type: ignore[import-untyped]
+from tokenizers.pre_tokenizers import Whitespace  # type: ignore[import-untyped]
+from tokenizers.processors import TemplateProcessing  # type: ignore[import-untyped]
+from tokenizers.trainers import BpeTrainer  # type: ignore[import-untyped]
 from tqdm import tqdm
 
 from llm_data_pretraining.extraction.configs import PipelineType
@@ -59,7 +59,7 @@ class TokenizerConfig(BaseModel):
 
     @field_validator("special_tokens")
     @classmethod
-    def validate_special_tokens(cls, v):
+    def validate_special_tokens(cls, v: list[str]) -> list[str]:
         """Ensure special tokens contain required tokens"""
         required_tokens = {"[UNK]"}
         if not required_tokens.issubset(set(v)):
@@ -276,11 +276,11 @@ class BPETokenizer:
             raise ValueError("Tokenizer must be trained before tokenizing")
 
         encoding = self.tokenizer.encode(text)
-        return encoding.ids
+        return list(encoding.ids)
 
     def decode_tokens(self, tokens: list[int]) -> str:
         """Decode tokens back to text"""
         if not self.is_trained:
             raise ValueError("Tokenizer must be trained before decoding")
 
-        return self.tokenizer.decode(tokens)
+        return str(self.tokenizer.decode(tokens))

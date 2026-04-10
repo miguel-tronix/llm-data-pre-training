@@ -154,7 +154,9 @@ class ParallelZstdJsonlReader:
 
 
 # --- Example usage ---
-def process_large_zstd_file_parallel(file_path: Path, num_processes: int = 1):
+def process_large_zstd_file_parallel(
+    file_path: Path, num_processes: int = 1
+) -> Iterator[dict[str, Any]]:
     """
     Example function to process a large Zstandard-compressed JSONL file in parallel
     """
@@ -175,7 +177,7 @@ def process_large_zstd_file_parallel(file_path: Path, num_processes: int = 1):
 
 def process_in_parallel_batches(
     file_path: Path, num_processes: int = 1, batch_size: int = 1000
-):
+) -> Iterator[dict[str, Any]]:
     """
     Process the file in parallel and process results in batches
     """

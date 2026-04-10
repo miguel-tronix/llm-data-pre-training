@@ -7,7 +7,7 @@ from re import Pattern
 from typing import Any
 
 import aiofiles
-from datasets import DownloadConfig, load_dataset
+from datasets import DownloadConfig, load_dataset  # type: ignore[import-untyped]
 
 from llm_data_pretraining.extraction.configs import (
     ProcessingStats,
@@ -29,7 +29,7 @@ try:
     HAS_ZSTD_READER = True
 except ImportError:
     HAS_ZSTD_READER = False
-    zstreader = None
+    zstreader = None  # type: ignore[assignment]
     logger.warning(
         "ParallelZstdJsonlReader not available. Falling back to standard processing."
     )
@@ -133,7 +133,7 @@ class WebRecordExtractor:
         """
         max_size = max_size or self.target_size
         current_size = 0
-        records = []
+        records: list[WebRecord] = []
 
         # Use ParallelZstdJsonlReader if available and requested
         if self.use_parallel_zstd and input_path.endswith(".jsonl.zst"):
@@ -156,7 +156,13 @@ class WebRecordExtractor:
 
         return records
 
-    async def _read_text(self, max_size, current_size, records, input_file):
+    async def _read_text(
+        self,
+        max_size: int,
+        current_size: int,
+        records: list[WebRecord],
+        input_file: Any,
+    ) -> None:
         content = await input_file.read()
         matches = self.WebRecord_pattern.findall(content)
 
@@ -187,7 +193,13 @@ class WebRecordExtractor:
                 self.invalid_count += 1
                 continue
 
-    async def _read_jsonl(self, max_size, current_size, records, input_file):
+    async def _read_jsonl(
+        self,
+        max_size: int,
+        current_size: int,
+        records: list[WebRecord],
+        input_file: Any,
+    ) -> None:
         for line in input_file:
             self.processed_count += 1
 
@@ -222,7 +234,6 @@ class WebRecordExtractor:
             except Exception:
                 self.invalid_count += 1
                 continue
-        return current_size
 
     async def _process_zstd_with_parallel_reader(
         self, input_path: str, output_path: str, num_processes: int = 1
@@ -453,14 +464,16 @@ class WebRecordExtractor:
 
         return records
 
-    async def _open_input_file(self, input_path: str):
+    async def _open_input_file(self, input_path: str) -> Any:
         """Open input file with appropriate handler based on extension"""
         if input_path.endswith(".zst"):
             return await aiofiles.open(input_path, encoding="utf-8")
         else:
             return await aiofiles.open(input_path, encoding="utf-8")
 
-    async def _process_text(self, input_file, output_file, current_size):
+    async def _process_text(
+        self, input_file: Any, output_file: Any, current_size: int
+    ) -> None:
         """Process text format files with Wikipedia content"""
         content = await input_file.read()
         matches = self.WebRecord_pattern.findall(content)
@@ -505,7 +518,9 @@ class WebRecordExtractor:
             f"total size: {current_size / 1024 / 1024:.2f}MB"
         )
 
-    async def _process_jsonl(self, input_file, output_file, current_size):
+    async def _process_jsonl(
+        self, input_file: Any, output_file: Any, current_size: int
+    ) -> None:
         """Process JSONL format files"""
         async for line in input_file:
             self.processed_count += 1

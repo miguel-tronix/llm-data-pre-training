@@ -125,7 +125,7 @@ class PubMedAbstractExtractor:
         """
         max_size = max_size or self.target_size
         current_size = 0
-        abstracts = []
+        abstracts: list[PubMedAbstract] = []
 
         # Use ParallelZstdJsonlReader if available and requested
         if self.use_parallel_zstd and input_path.endswith(".jsonl.zst"):
@@ -139,7 +139,7 @@ class PubMedAbstractExtractor:
         try:
             # Process based on file format
             if input_path.endswith(".jsonl") or input_path.endswith(".jsonl.gz"):
-                await self._read_jsonl(max_size, current_size, abstracts, input_file)
+                self._read_jsonl(max_size, current_size, abstracts, input_file)
             else:
                 await self._read_text(max_size, current_size, abstracts, input_file)
 
@@ -148,7 +148,13 @@ class PubMedAbstractExtractor:
 
         return abstracts
 
-    async def _read_text(self, max_size, current_size, abstracts, input_file):
+    async def _read_text(
+        self,
+        max_size: int,
+        current_size: int,
+        abstracts: list[PubMedAbstract],
+        input_file: Any,
+    ) -> None:
         content = await input_file.read()
         matches = self.pubmed_pattern.findall(content)
 
@@ -177,7 +183,13 @@ class PubMedAbstractExtractor:
                 self.invalid_count += 1
                 continue
 
-    def _read_jsonl(self, max_size, current_size, abstracts, input_file):
+    def _read_jsonl(
+        self,
+        max_size: int,
+        current_size: int,
+        abstracts: list[PubMedAbstract],
+        input_file: Any,
+    ) -> None:
         for line in input_file:
             self.processed_count += 1
 
@@ -333,14 +345,16 @@ class PubMedAbstractExtractor:
 
         return abstracts
 
-    async def _open_input_file(self, input_path: str):
+    async def _open_input_file(self, input_path: str) -> Any:
         """Open input file with appropriate handler based on extension"""
         if input_path.endswith(".zst"):
             return await aiofiles.open(input_path, encoding="utf-8")
         else:
             return await aiofiles.open(input_path, encoding="utf-8")
 
-    async def _process_text(self, input_file, output_file, current_size):
+    async def _process_text(
+        self, input_file: Any, output_file: Any, current_size: int
+    ) -> None:
         """Process text format files with PubMed content"""
         content = await input_file.read()
         matches = self.pubmed_pattern.findall(content)
@@ -383,7 +397,9 @@ class PubMedAbstractExtractor:
             f"total size: {current_size / 1024 / 1024:.2f}MB"
         )
 
-    async def _process_jsonl(self, input_file, output_file, current_size):
+    async def _process_jsonl(
+        self, input_file: Any, output_file: Any, current_size: int
+    ) -> None:
         """Process JSONL format files"""
         async for line in input_file:
             self.processed_count += 1

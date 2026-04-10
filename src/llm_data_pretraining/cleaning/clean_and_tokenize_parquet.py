@@ -4,16 +4,17 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
-from datasets import Dataset
-from torch.utils.data import DataLoader
-from transformers import AutoTokenizer
+import pyarrow as pa  # type: ignore[import-untyped]
+import pyarrow.parquet as pq  # type: ignore[import-untyped]
+from datasets import Dataset  # type: ignore[import-untyped]
+from torch.utils.data import DataLoader  # type: ignore[import-not-found]
+from transformers import AutoTokenizer  # type: ignore[import-not-found]
 
 # Configure logging
-from src.main import logger
+from main import logger
 
 
 @dataclass
@@ -35,7 +36,7 @@ class ParquetPubMedProcessor:
         self.output_dir = config.output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def jsonl_to_parquet(self, jsonl_path: Path, parquet_path: Path):
+    def jsonl_to_parquet(self, jsonl_path: Path, parquet_path: Path) -> None:
         """Convert JSONL file to Parquet format"""
         # Read JSONL and convert to PyArrow Table
         table = pq.read_table(jsonl_path, schema=self._get_schema())
@@ -133,8 +134,12 @@ class ParquetPubMedProcessor:
             r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
         )
 
-        def contains_pii(text):
-            return bool(email_pattern.search(text)) if isinstance(text, str) else False
+        def contains_pii(text: object) -> bool:
+            return (
+                bool(email_pattern.search(str(text)))
+                if isinstance(text, str)
+                else False
+            )
 
         df["contains_pii"] = df["cleaned_text"].apply(contains_pii)
         return df[~df["contains_pii"]]
@@ -149,21 +154,24 @@ class ParquetPubMedProcessor:
 
     def prepare_for_tokenization(
         self, dataset: Dataset, tokenizer_name: str = "bert-base-uncased"
-    ):
+    ) -> Dataset:
         """Prepare dataset for tokenization using Hugging Face"""
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
-        def tokenize_function(examples):
-            return tokenizer(
+        def tokenize_function(examples: dict[str, Any]) -> dict[str, Any]:
+            result = tokenizer(
                 examples["cleaned_text"],
                 truncation=True,
                 padding="max_length",
                 max_length=512,
             )
+            return dict(result)
 
         return dataset.map(tokenize_function, batched=True)
 
-    def create_torch_dataloader(self, tokenized_dataset, batch_size: int = 32):
+    def create_torch_dataloader(
+        self, tokenized_dataset: Dataset, batch_size: int = 32
+    ) -> DataLoader:
         """Create PyTorch DataLoader for training"""
         tokenized_dataset.set_format(
             type="torch", columns=["input_ids", "attention_mask", "token_type_ids"]
@@ -178,7 +186,7 @@ class ParquetPubMedProcessor:
 
 
 # --- Example Usage ---
-def run_parquet_pipeline():
+def run_parquet_pipeline() -> tuple[DataLoader, Path]:
     """Run the complete Parquet-based pipeline"""
     config = ParquetPipelineConfig(
         input_path=Path("pubmed_abstracts.jsonl"),
@@ -211,7 +219,7 @@ def run_parquet_pipeline():
 
 
 # --- Benchmark Comparison ---
-def benchmark_formats():
+def benchmark_formats() -> None:
     """Compare performance of JSONL vs Parquet"""
     # Test with sample data
     test_file = Path("sample_data.jsonl")

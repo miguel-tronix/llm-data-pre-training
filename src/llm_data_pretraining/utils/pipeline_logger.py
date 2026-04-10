@@ -6,7 +6,7 @@ class PipelineLogger:
     _logger = None
 
     @classmethod
-    def get_logger(cls):
+    def get_logger(cls) -> logging.Logger:
         if cls._logger is None:
             cls._logger = logging.getLogger("pretraining_pipeline")
             cls._logger.setLevel(logging.DEBUG)
@@ -31,5 +31,5 @@ class PipelineLogger:
 
 
 # Convenience function
-def get_pipeline_logger():
+def get_pipeline_logger() -> logging.Logger:
     return PipelineLogger.get_logger()

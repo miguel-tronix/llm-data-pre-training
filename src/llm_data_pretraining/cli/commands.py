@@ -42,7 +42,7 @@ def download(  # noqa: PLR0913
     parallel_downloads: Annotated[
         int, typer.Option(help="Parallel download processes")
     ] = 4,
-):
+) -> None:
     config = DownloadConfig(
         repo_id=repo_id,
         raw_data_dir=output_dir,
@@ -54,12 +54,12 @@ def download(  # noqa: PLR0913
         num_parallel_downloads=parallel_downloads,
     )
 
-    async def run():
+    async def run() -> None:
         async with HFDatasetDownloader(config) as downloader:
-            return await downloader.download_dataset()
+            dl_result = await downloader.download_dataset()
+        typer.echo(f"Download completed: {dl_result.message}")
 
-    result = asyncio.run(run())
-    typer.echo(f"Download completed: {result.message}")
+    asyncio.run(run())
 
 
 @app.command()
@@ -70,39 +70,40 @@ def extract(
         PipelineType, typer.Option(help="Data source type")
     ] = PipelineType.PUBMED,
     file_size_mb: Annotated[int, typer.Option(help="Target output size (MB)")] = 50,
-):
-    async def run():
+) -> None:
+    async def run() -> None:
+        result = None
         if source_type == PipelineType.PUBMED:
-            extractor = PubMedAbstractExtractor(
+            pubmed_extractor = PubMedAbstractExtractor(
                 use_parallel_zstd=True, num_processes=1, file_size_mb=file_size_mb
             )
-            return await extractor.extract_abstracts_to_file(
+            result = await pubmed_extractor.extract_abstracts_to_file(
                 str(input_path), str(output_path)
             )
         elif source_type == PipelineType.GITHUB:
-            extractor = GitHubRecordExtractor(
+            github_extractor = GitHubRecordExtractor(
                 use_parallel_zstd=True, num_processes=1, file_size_mb=file_size_mb
             )
-            return await extractor.extract_records_to_file(
+            result = await github_extractor.extract_records_to_file(
                 str(input_path), str(output_path)
             )
         elif source_type == PipelineType.WIKI:
-            extractor = WikiArticleExtractor(
+            wiki_extractor = WikiArticleExtractor(
                 use_parallel_zstd=True, num_processes=1, file_size_mb=file_size_mb
             )
-            return await extractor.extract_articles_to_file(
+            result = await wiki_extractor.extract_articles_to_file(
                 str(input_path), str(output_path)
             )
         elif source_type == PipelineType.WEB:
-            extractor = WebRecordExtractor(
+            web_extractor = WebRecordExtractor(
                 use_parallel_zstd=True, num_processes=1, file_size_mb=file_size_mb
             )
-            return await extractor.extract_articles_to_file(
+            result = await web_extractor.extract_articles_to_file(
                 str(input_path), str(output_path)
             )
+        typer.echo(f"Extraction completed: {result}")
 
-    result = asyncio.run(run())
-    typer.echo(f"Extraction completed: {result}")
+    asyncio.run(run())
 
 
 @app.command()
@@ -117,14 +118,9 @@ def clean(  # noqa: PLR0913
     min_length: Annotated[int, typer.Option(help="Minimum text length")] = 50,
     max_length: Annotated[int, typer.Option(help="Maximum text length")] = 1500,
     detect_pii: Annotated[bool, typer.Option(help="Enable PII detection")] = True,
-):
-    config = PipelineConfig(
-        input_path=input_path,
-        output_dir=output_dir,
-        min_abstract_length=min_length,
-        max_abstract_length=max_length,
-        deduplication_method=DeduplicationMethod.CONTENT_HASH,
-        pii_config=PIIDetectionConfig(
+) -> None:
+    pii_config: PIIDetectionConfig | None = (
+        PIIDetectionConfig(
             detect_emails=detect_pii,
             detect_phones=detect_pii,
             detect_ssn=detect_pii,
@@ -132,7 +128,15 @@ def clean(  # noqa: PLR0913
             detect_demographics=detect_pii,
         )
         if detect_pii
-        else None,
+        else None
+    )
+    config = PipelineConfig(
+        input_path=input_path,
+        output_dir=output_dir,
+        min_abstract_length=min_length,
+        max_abstract_length=max_length,
+        deduplication_method=DeduplicationMethod.CONTENT_HASH,
+        pii_config=pii_config if pii_config is not None else PIIDetectionConfig(),
         pipeline_type=pipeline_type,
     )
 
@@ -150,7 +154,7 @@ def tokenize(
     vocab_size: Annotated[int, typer.Option(help="Vocabulary size")] = 30000,
     min_frequency: Annotated[int, typer.Option(help="Minimum token frequency")] = 2,
     max_length: Annotated[int, typer.Option(help="Maximum sequence length")] = 512,
-):
+) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     config = TokenizerConfig(

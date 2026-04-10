@@ -1,36 +1,57 @@
-# Build stage
+# --- Build Stage ---
+FROM ghcr.io/astral-sh/uv:latest AS uv_bin
 FROM python:3.10-slim-bullseye AS builder
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# Install build dependencies if needed (e.g., for compiled extensions)
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+#     build-essential \
+#     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-#RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-RUN curl -LsSf https://astral.sh/uv/install.sh -o install.sh
-RUN sh install.sh 
-RUN mv /root/.local/bin/uv /usr/local/bin/uv
-#ENV PATH="/root/.cargo/bin:${PATH}"
+# Copy uv binary from official image
+COPY --from=uv_bin /uv /usr/local/bin/uv
 
-# Clone your project
-RUN git clone https://github.com/miguel-tronix/llm-data-pre-training.git /opt/llm-data-pretraining
-
-# Set working directory and create a virtual environment
+# Set working directory
 WORKDIR /opt/llm-data-pretraining
-RUN uv venv
-RUN uv lock
-RUN uv sync --frozen
 
-# Runtime stage
+# Enable bytecode compilation and use the uv link mode
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+
+# Copy only dependency files to leverage layer caching
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies without the project itself
+# --no-install-project ensures we cache the environment layer
+# --no-dev excludes developmental dependencies
+RUN uv sync --frozen --no-install-project --no-dev
+
+# Copy the rest of the application
+COPY . .
+
+# Install the project
+RUN uv sync --frozen --no-dev
+
+# --- Runtime Stage ---
 FROM python:3.10-slim-bullseye
 
-# Set the working directory
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PATH="/opt/llm-data-pretraining/.venv/bin:$PATH"
+
+# Set working directory
 WORKDIR /opt/llm-data-pretraining
 
-# Copy the project with the virtual environment from the builder stage
-COPY --from=builder /opt/llm-data-pretraining /opt/llm-data-pretraining
+# Create a non-root user for security
+RUN groupadd -r appuser && useradd -r -g appuser appuser \
+    && mkdir -p /opt/llm-data-pretraining/logs \
+    && chown -R appuser:appuser /opt/llm-data-pretraining
 
-# Set the entrypoint to use the Python interpreter from the virtual environment
-ENTRYPOINT ["/opt/llm-data-pretraining/.venv/bin/python", "src/main.py"]
+# Copy the virtual environment and application from the builder
+COPY --from=builder --chown=appuser:appuser /opt/llm-data-pretraining /opt/llm-data-pretraining
+
+# Switch to non-root user
+USER appuser
+
+# Entrypoint using the virtual environment (via PATH)
+ENTRYPOINT ["python", "main.py"]
