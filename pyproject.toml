@@ -2,7 +2,7 @@
 [project]
 tool.uv.project = true
 name = "llm-data-pretraining"
-version = "0.2.0"
+version = "0.2.2"
 description = "Project to showcase a data prep pipeline for LLM pretraining"
 readme = "README.md"
 license = {text = "MIT"}

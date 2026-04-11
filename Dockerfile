@@ -38,13 +38,20 @@ FROM python:3.10-slim-bullseye
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PATH="/opt/llm-data-pretraining/.venv/bin:$PATH"
+# Redirect HuggingFace cache to a directory owned by appuser.
+# Without this, hf_hub defaults to ~/.cache/huggingface which does not exist
+# for system users created with `useradd -r` (no home directory).
+ENV HF_HOME="/opt/llm-data-pretraining/.cache/huggingface"
+ENV HF_DATASETS_CACHE="/opt/llm-data-pretraining/.cache/huggingface/datasets"
 
 # Set working directory
 WORKDIR /opt/llm-data-pretraining
 
 # Create a non-root user for security
-RUN groupadd -r appuser && useradd -r -g appuser appuser \
+# Use explicit UID/GID 999 so the Kubernetes Job fsGroup can be set accurately.
+RUN groupadd -r -g 999 appuser && useradd -r -u 999 -g appuser appuser \
     && mkdir -p /opt/llm-data-pretraining/logs \
+    && mkdir -p /opt/llm-data-pretraining/.cache/huggingface \
     && chown -R appuser:appuser /opt/llm-data-pretraining
 
 # Copy the virtual environment and application from the builder
