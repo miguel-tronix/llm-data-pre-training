@@ -1,0 +1,11 @@
+ found the problem in your download_utils.py script! The mathematical logic for calculating the byte ranges was actually perfect, but the corruption (which occurred exactly at byte 18350500 of the compressed stream) was caused by how the requests library handles interrupted downloads and HTTP stream decoding.
+
+There were a few critical "silent failure" modes in _download_chunk_process that I have now patched:
+
+Transparent Decompression: By default, requests sends an Accept-Encoding: gzip, deflate header. If a CDN node dynamically compressed the stream in transit, requests would automatically decompress it. However, the byte offsets you track on disk (start_offset) would represent the uncompressed bytes, while the Range header you send on retry requests the compressed bytes! This causes massive byte misalignment when resuming an interrupted chunk.
+Ignoring 200 OK Responses on Resume: If a chunk download drops and retries with a Range header, some proxy servers or CDN edge nodes occasionally ignore the Range header and return 200 OK (sending the entire file from byte 0) instead of 206 Partial Content. Because your code didn't check the status code on retries, it would blindly open the file in "ab" (append) mode and paste the entire 11GB file starting from byte 0 right into the middle of the chunk!
+I've modified src/llm_data_pretraining/data_fetch/download_utils.py with the following rock-solid safeguards:
+
+Forced Accept-Encoding: identity: This prevents CDNs and proxies from applying any transparent HTTP compression, guaranteeing the bytes over the wire exactly match the .zst file bytes on disk.
+Strict 206 Validation: When resuming a chunk (start_offset > 0), the code now strictly verifies that response.status_code == 206. If the server returns a 200 OK, it logs a warning and retries instead of corrupting the file.
+Raw Stream Processing: I replaced response.iter_content with response.raw.stream(decode_content=False) to pull the absolute raw bytes straight from the socket, completely bypassing any hidden decoding logic in urllib3.
