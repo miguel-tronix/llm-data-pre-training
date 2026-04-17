@@ -45,17 +45,31 @@ def _download_chunk_process(
             if start_offset >= expected_size:
                 return True  # Chunk is already complete
 
-            headers = {"Range": f"bytes={start_byte + start_offset}-{end_byte}"}
+            headers = {
+                "Range": f"bytes={start_byte + start_offset}-{end_byte}",
+                "Accept-Encoding": "identity",  # Prevent transparent decompression
+            }
 
             with requests.get(
                 url, headers=headers, stream=True, timeout=timeout
             ) as response:
                 response.raise_for_status()
 
+                # If we requested a range, the server must return 206 Partial Content.
+                # If it returns 200 OK, it ignored the Range header and is sending the whole file.
+                if start_offset > 0 and response.status_code != 206:
+                    logger.warning(
+                        f"Server returned status {response.status_code} "
+                        f"instead of 206 for Range request. Retrying..."
+                    )
+                    continue
+
                 mode = "ab" if start_offset > 0 else "wb"
                 with open(part_path, mode) as f:
-                    for chunk in response.iter_content(chunk_size=chunk_size):
-                        f.write(chunk)
+                    # Use raw stream to avoid ANY transparent decoding by requests
+                    for chunk in response.raw.stream(chunk_size, decode_content=False):
+                        if chunk:
+                            f.write(chunk)
 
                 if part_path.stat().st_size == expected_size:
                     return True

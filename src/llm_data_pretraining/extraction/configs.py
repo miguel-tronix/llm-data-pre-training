@@ -27,8 +27,8 @@ class ProcessingStats(BaseModel):
     )
     output_size_mb: int = Field(
         ge=10,
-        le=200,
-        description="Output size in megabytes - must be between 10 and 200 MB",
+        le=1000,
+        description="Output size in megabytes - must be between 10 and 1000 MB",
     )
 
     @field_validator("valid", "invalid")
