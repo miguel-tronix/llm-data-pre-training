@@ -19,6 +19,10 @@ from llm_data_pretraining.extraction.configs import PipelineType
 from llm_data_pretraining.extraction.github_extractor import GitHubRecordExtractor
 from llm_data_pretraining.extraction.pubmed_extractor import PubMedAbstractExtractor
 from llm_data_pretraining.extraction.wikipedia_extractor import WikiArticleExtractor
+from llm_data_pretraining.ingestion.pubmed_ingestion import (
+    PubmedIngestion,
+    PubmedIngestionConfig,
+)
 from llm_data_pretraining.training.tokenization import BPETokenizer, TokenizerConfig
 
 app = typer.Typer(help="LLM Data Pretraining Pipeline CLI")
@@ -171,6 +175,38 @@ def tokenize(
     total_tokens = tokenizer.tokenize_corpus(corpus_path, tokens_path)
 
     typer.echo(f"Tokenization completed. Total tokens: {total_tokens}")
+
+
+@app.command()
+def ingest(
+    jsonl_path: Annotated[Path, typer.Argument(help="Cleaned PubMed JSONL file")],
+    deepdive_url: Annotated[
+        str, typer.Option(help="DeepDive API base URL")
+    ] = "http://localhost:8000",
+    batch_size: Annotated[int, typer.Option(help="Records per batch")] = 32,
+    max_records: Annotated[
+        int | None, typer.Option(help="Max records to process")
+    ] = None,
+    no_filter: Annotated[
+        bool, typer.Option("--no-filter", help="Disable medical intervention filtering")
+    ] = False,
+    concurrency: Annotated[int, typer.Option(help="Max concurrent requests")] = 4,
+) -> None:
+    config = PubmedIngestionConfig(
+        jsonl_path=jsonl_path,
+        deepdive_url=deepdive_url,
+        batch_size=batch_size,
+        max_records=max_records,
+        filter_interventions=not no_filter,
+        concurrency=concurrency,
+    )
+
+    async def run() -> None:
+        ingestion = PubmedIngestion(config)
+        result = await ingestion.run()
+        typer.echo(result.model_dump_json(indent=2))
+
+    asyncio.run(run())
 
 
 if __name__ == "__main__":

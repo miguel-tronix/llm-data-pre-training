@@ -26,6 +26,7 @@ dependencies = [
     "ftfy", # For fixing Unicode and text cleaning
     "ruff>=0.15.6",
     "types-tqdm>=4.67.3.20260408",
+    "mypy>=2.1.0",
 ]
 
 [project.optional-dependencies]
