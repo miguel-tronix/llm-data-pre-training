@@ -34,6 +34,8 @@ dev = [
     "ruff>=0.1.0",  # Replace black, isort, flake8 with ruff
     "mypy>=1.4.0",  # Keep mypy for type checking
     "pre-commit>=3.5.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
 ]
 
 [dependency-groups]

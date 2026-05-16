@@ -2,7 +2,7 @@ import asyncio
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import aiohttp
 from pydantic import BaseModel, Field, field_validator
@@ -192,6 +192,65 @@ class PubmedIngestion:
                     records.append(json.loads(line))
         return records
 
+    def iter_records(self) -> Iterator[dict[str, Any]]:
+        with open(self.config.jsonl_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    yield json.loads(line)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        f"Skipping incomplete line at EOF: {line[:120]}..."
+                    )
+                    break
+
+    def iter_payload_batches(
+        self,
+    ) -> Iterator[tuple[list[dict[str, str]], int]]:
+        batch: list[dict[str, str]] = []
+        segment_read = 0
+        cumulative_read = 0
+        yielded = False
+
+        for rec in self.iter_records():
+            if self.config.max_records is not None and cumulative_read >= self.config.max_records:
+                break
+
+            cumulative_read += 1
+            segment_read += 1
+
+            if self.config.filter_interventions:
+                text = rec.get("text") or rec.get("abstract_text", "")
+                if not self.is_medical_intervention(text):
+                    continue
+
+            abstract = rec.get("text") or rec.get("abstract_text", "")
+            pmid = rec.get("id") or rec.get("pmid", "")
+            title = rec.get("title", "")
+
+            if not title and self.config.extract_title:
+                title = self._extract_title(abstract)
+
+            if pmid and abstract:
+                batch.append({
+                    "pmid": str(pmid),
+                    "title": title,
+                    "abstract": abstract,
+                })
+
+            if len(batch) >= self.config.batch_size:
+                yield batch, segment_read
+                yielded = True
+                batch = []
+                segment_read = 0
+
+        if batch:
+            yield batch, segment_read
+        elif cumulative_read > 0 and not yielded:
+            yield batch, segment_read
+
     def is_medical_intervention(self, text: str) -> bool:
         if not text:
             return False
@@ -323,5 +382,56 @@ class PubmedIngestion:
 
         logger.info(
             f"Ingestion complete: {total_sent} sent, {len(all_errors)} failed"
+        )
+        return result
+
+    async def run_streaming(self) -> IngestionResult:
+        logger.info(f"Streaming records from {self.config.jsonl_path}")
+
+        total_sent = 0
+        total_filtered = 0
+        total_read = 0
+        all_errors: list[str] = []
+        batch_num = 0
+
+        owns_session = self._session is None
+
+        if owns_session:
+            async with aiohttp.ClientSession() as self._session:
+                for batch, read_count in self.iter_payload_batches():
+                    batch_num += 1
+                    total_read += read_count
+                    total_filtered += len(batch)
+                    sent, errors = await self.send_batch(batch)
+                    total_sent += sent
+                    all_errors.extend(errors)
+                    logger.info(
+                        f"Batch {batch_num}: "
+                        f"{sent}/{len(batch)} sent, {len(errors)} errors"
+                    )
+        else:
+            for batch, read_count in self.iter_payload_batches():
+                batch_num += 1
+                total_read += read_count
+                total_filtered += len(batch)
+                sent, errors = await self.send_batch(batch)
+                total_sent += sent
+                all_errors.extend(errors)
+                logger.info(
+                    f"Batch {batch_num}: "
+                    f"{sent}/{len(batch)} sent, {len(errors)} errors"
+                )
+
+        result = IngestionResult(
+            success=len(all_errors) == 0,
+            total_records=total_read,
+            filtered_records=total_filtered,
+            sent_records=total_sent,
+            failed_records=len(all_errors),
+            errors=all_errors[:20],
+        )
+
+        logger.info(
+            f"Streaming ingestion complete: {total_sent} sent, {len(all_errors)} failed"
         )
         return result
