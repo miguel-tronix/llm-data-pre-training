@@ -174,7 +174,7 @@ class PubmedIngestion:
             raise RuntimeError("Session not initialised. Use async with or call run()")
         return self._session
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "PubmedIngestion":
         self._session = aiohttp.ClientSession()
         return self
 
