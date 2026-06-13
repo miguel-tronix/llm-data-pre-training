@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llm-pretraining-job
+  namespace: deepdive
+spec:
+  template:
+    spec:
+      containers:
+        - name: pretraining
+          image: localhost:32000/llm/pretraining/llm-data-pretraining:0.2.2
+          envFrom:
+            - configMapRef:
+                name: llm-pretraining-config
+          volumeMounts:
+            - name: data-volume
+              mountPath: /opt/llm-data-pretraining/data
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+      restartPolicy: OnFailure
+      securityContext:
+        fsGroup: 999 # Matches GID of appuser defined in the Dockerfile
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: llm-data-pvc
+  backoffLimit: 4

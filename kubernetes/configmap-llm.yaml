@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-pretraining-config
+  namespace: deepdive
+data:
+  BASEDATA_PATH: "/opt/llm-data-pretraining/data"
+  RAWDATA_PATH: "rawdata"
+  PRECLEANDATA_PATH: "precleandata"
+  CLEANDATA_PATH: "cleandata"
+  TRAINDATA_PATH: "traindata"
+  NUM_PROCESSES: "4"
+  LOG_LEVEL: "INFO"
+  # Add other environment variables as needed
