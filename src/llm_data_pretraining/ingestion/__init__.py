@@ -1,7 +1,7 @@
 from llm_data_pretraining.ingestion.pubmed_ingestion import (
-    IngestionResult,
     PubmedIngestion,
     PubmedIngestionConfig,
+    IngestionResult,
 )
 
-__all__ = ["IngestionResult", "PubmedIngestion", "PubmedIngestionConfig"]
+__all__ = ["PubmedIngestion", "PubmedIngestionConfig", "IngestionResult"]

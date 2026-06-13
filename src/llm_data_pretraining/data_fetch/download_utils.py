@@ -2,7 +2,6 @@ import asyncio
 import functools
 import os
 import re
-import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -17,6 +16,10 @@ from tqdm import tqdm
 from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 logger = get_pipeline_logger()
+
+HTTP_PARTIAL_CONTENT = 206
+MB_100 = 100 * 1024 * 1024
+MB_500 = 500 * 1024 * 1024
 
 HTTP_PARTIAL_CONTENT = 206
 MB_100 = 100 * 1024 * 1024
@@ -37,17 +40,15 @@ def _download_chunk_process(
     """
     start_byte = kwargs.get("start_byte", 0)
     end_byte = kwargs.get("end_byte", 0)
-    part_path = Path(kwargs.get("part_path", ""))
+    part_path = kwargs.get("part_path", "")
 
-    backoff = 1.0
+    backoff = 1
     for _attempt in range(max_retries):
         chunk_complete = _download_chunk_attempt(
             url, chunk_size, timeout, start_byte, end_byte, part_path, backoff
         )
         if chunk_complete:
             return True
-        if _attempt < max_retries - 1:
-            time.sleep(backoff)
         backoff *= 2
 
     logger.error(
@@ -56,7 +57,7 @@ def _download_chunk_process(
     return False
 
 
-def _download_chunk_attempt(  # noqa: PLR0911
+def _download_chunk_attempt(
     url: str,
     chunk_size: int,
     timeout: int,
@@ -67,28 +68,21 @@ def _download_chunk_attempt(  # noqa: PLR0911
 ) -> bool | None:
     """
     Single attempt to download a file chunk.
-    Returns True on success, False on fatal failure, None to retry.
+    Returns True on success, False on failure, None to retry.
     """
     try:
-        expected_size = end_byte - start_byte + 1
-
-        # Validate any pre-existing part file
         start_offset = 0
         if part_path.exists():
             start_offset = part_path.stat().st_size
-            if start_offset == expected_size:
-                return True  # already complete
-            if start_offset > expected_size:
-                # Part file is larger than expected — the server likely
-                # ignored the Range header and returned the full file.
-                # Discard the corrupt part and restart fresh.
-                logger.warning(
-                    f"Part {part_path.name} is oversized "
-                    f"({start_offset} > {expected_size}), discarding and retrying."
-                )
-                part_path.unlink()
-                start_offset = 0
 
+        expected_size = end_byte - start_byte + 1
+        if start_offset >= expected_size:
+            return True
+
+        headers = {
+            "Range": f"bytes={start_byte + start_offset}-{end_byte}",
+            "Accept-Encoding": "identity",
+        }
         headers = {
             "Range": f"bytes={start_byte + start_offset}-{end_byte}",
             "Accept-Encoding": "identity",
@@ -97,23 +91,26 @@ def _download_chunk_attempt(  # noqa: PLR0911
         response = requests.get(url, headers=headers, stream=True, timeout=timeout)
         try:
             response.raise_for_status()
+        response = requests.get(url, headers=headers, stream=True, timeout=timeout)
+        try:
+            response.raise_for_status()
 
-            # A Range request must receive a 206 Partial Content.
-            # If the server returns 200 it may have sent the full file.
-            if response.status_code != HTTP_PARTIAL_CONTENT:
+            if start_offset > 0 and response.status_code != HTTP_PARTIAL_CONTENT:
                 logger.warning(
                     f"Server returned {response.status_code} "
-                    f"instead of {HTTP_PARTIAL_CONTENT} for range request. "
-                    f"Retrying..."
+                    f"instead of {HTTP_PARTIAL_CONTENT}. Retrying..."
                 )
                 return None
 
             mode = "ab" if start_offset > 0 else "wb"
             with open(part_path, mode) as f:
-                for chunk in response.iter_content(chunk_size=chunk_size):
+                for chunk in response.raw.stream(chunk_size, decode_content=False):
                     if chunk:
                         f.write(chunk)
 
+            actual_size = part_path.stat().st_size
+            if actual_size == expected_size:
+                return True
             actual_size = part_path.stat().st_size
             if actual_size == expected_size:
                 return True
@@ -127,12 +124,12 @@ def _download_chunk_attempt(  # noqa: PLR0911
     except requests.exceptions.RequestException as e:
         logger.warning(f"Error downloading chunk {part_path.name} (attempt): {e}")
         return None
-    except OSError as e:
-        logger.warning(f"OS error for {part_path.name}: {e}")
-        return None
     except Exception as e:
         logger.error(f"Unexpected error for {part_path.name}: {e}")
         return False
+
+
+# ruff: noqa: PLR0913
 
 
 # ruff: noqa: PLR0913
@@ -316,6 +313,24 @@ class HFDatasetDownloader:
                 self.config.timeout,
             )
 
+            results = await asyncio.gather(
+                *[
+                    asyncio.wrap_future(
+                        loop.run_in_executor(
+                            executor,
+                            functools.partial(
+                                worker_func,
+                                part_path=local_path.with_name(
+                                    f"{local_path.name}.part{i}"
+                                ),
+                                start_byte=start,
+                                end_byte=end,
+                            ),
+                        )
+                    )
+                    for i, (start, end) in enumerate(ranges)
+                ]
+            )
             results = await asyncio.gather(
                 *[
                     asyncio.wrap_future(

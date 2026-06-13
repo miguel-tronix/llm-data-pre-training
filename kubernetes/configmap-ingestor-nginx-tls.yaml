@@ -30,14 +30,14 @@ data:
 
             location / {
                 proxy_pass https://deepdive_api;
-
+                
                 # mTLS configuration for upstream
                 proxy_ssl_certificate         /etc/nginx/certs/client.crt;
                 proxy_ssl_certificate_key     /etc/nginx/certs/client.key;
                 proxy_ssl_trusted_certificate /etc/nginx/certs/ca.crt;
                 proxy_ssl_verify             on;
                 proxy_ssl_verify_depth       2;
-
+                
                 # SNI is critical for most mTLS setups
                 proxy_ssl_server_name       on;
                 proxy_ssl_name              deepdive-api;
