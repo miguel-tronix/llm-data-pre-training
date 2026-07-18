@@ -1,16 +1,18 @@
 import asyncio
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import aiohttp
 from pydantic import BaseModel, Field, field_validator
-from tqdm import tqdm
 
 from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 logger = get_pipeline_logger()
+
+HTTP_OK = 200
 
 INTERVENTION_PATTERNS: list[re.Pattern] = [
     re.compile(r, re.IGNORECASE)
@@ -121,27 +123,34 @@ INTERVENTION_PATTERNS: list[re.Pattern] = [
 
 
 class PubmedIngestionConfig(BaseModel):
-    jsonl_path: Path = Field(
-        ..., description="Path to cleaned PubMed JSONL file"
-    )
+    jsonl_path: Path = Field(..., description="Path to cleaned PubMed JSONL file")
     deepdive_url: str = Field(
         default="http://localhost:8000",
         description="DeepDive API base URL",
     )
     batch_size: int = Field(
-        default=32, ge=1, le=256, description="Records per batch",
+        default=32,
+        ge=1,
+        le=256,
+        description="Records per batch",
     )
     max_records: int | None = Field(
-        default=None, description="Max records to process (None = all)",
+        default=None,
+        description="Max records to process (None = all)",
     )
     filter_interventions: bool = Field(
-        default=True, description="Filter for medical intervention abstracts",
+        default=True,
+        description="Filter for medical intervention abstracts",
     )
     concurrency: int = Field(
-        default=4, ge=1, le=32, description="Max concurrent HTTP requests",
+        default=4,
+        ge=1,
+        le=32,
+        description="Max concurrent HTTP requests",
     )
     extract_title: bool = Field(
-        default=True, description="Extract title from first sentence if absent",
+        default=True,
+        description="Extract title from first sentence if absent",
     )
 
     model_config = {"arbitrary_types_allowed": False}
@@ -187,22 +196,22 @@ class PubmedIngestion:
         records: list[dict[str, Any]] = []
         with open(self.config.jsonl_path, encoding="utf-8") as f:
             for line in f:
-                line = line.strip()
-                if line:
-                    records.append(json.loads(line))
+                stripped = line.strip()
+                if stripped:
+                    records.append(json.loads(stripped))
         return records
 
     def iter_records(self) -> Iterator[dict[str, Any]]:
         with open(self.config.jsonl_path, encoding="utf-8") as f:
             for line in f:
-                line = line.strip()
-                if not line:
+                stripped = line.strip()
+                if not stripped:
                     continue
                 try:
-                    yield json.loads(line)
+                    yield json.loads(stripped)
                 except json.JSONDecodeError:
                     logger.warning(
-                        f"Skipping incomplete line at EOF: {line[:120]}..."
+                        f"Skipping incomplete line at EOF: {stripped[:120]}..."
                     )
                     break
 
@@ -215,7 +224,10 @@ class PubmedIngestion:
         yielded = False
 
         for rec in self.iter_records():
-            if self.config.max_records is not None and cumulative_read >= self.config.max_records:
+            if (
+                self.config.max_records is not None
+                and cumulative_read >= self.config.max_records
+            ):
                 break
 
             cumulative_read += 1
@@ -234,11 +246,13 @@ class PubmedIngestion:
                 title = self._extract_title(abstract)
 
             if pmid and abstract:
-                batch.append({
-                    "pmid": str(pmid),
-                    "title": title,
-                    "abstract": abstract,
-                })
+                batch.append(
+                    {
+                        "pmid": str(pmid),
+                        "title": title,
+                        "abstract": abstract,
+                    }
+                )
 
             if len(batch) >= self.config.batch_size:
                 yield batch, segment_read
@@ -256,9 +270,7 @@ class PubmedIngestion:
             return False
         return any(pattern.search(text) for pattern in INTERVENTION_PATTERNS)
 
-    def filter_records(
-        self, records: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    def filter_records(self, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not self.config.filter_interventions:
             return records
 
@@ -277,12 +289,10 @@ class PubmedIngestion:
         if match:
             title = match.group(1)
         else:
-            title = text.split(".")[0] if "." in text else text[:200]
+            title = text.split(".", maxsplit=1)[0] if "." in text else text[:200]
         return title.strip()[:200]
 
-    def prepare_payloads(
-        self, records: list[dict[str, Any]]
-    ) -> list[dict[str, str]]:
+    def prepare_payloads(self, records: list[dict[str, Any]]) -> list[dict[str, str]]:
         payloads = []
         for rec in records:
             abstract = rec.get("text") or rec.get("abstract_text", "")
@@ -293,16 +303,16 @@ class PubmedIngestion:
                 title = self._extract_title(abstract)
 
             if pmid and abstract:
-                payloads.append({
-                    "pmid": str(pmid),
-                    "title": title,
-                    "abstract": abstract,
-                })
+                payloads.append(
+                    {
+                        "pmid": str(pmid),
+                        "title": title,
+                        "abstract": abstract,
+                    }
+                )
         return payloads
 
-    async def send_batch(
-        self, payloads: list[dict[str, str]]
-    ) -> tuple[int, list[str]]:
+    async def send_batch(self, payloads: list[dict[str, str]]) -> tuple[int, list[str]]:
         semaphore = asyncio.Semaphore(self.config.concurrency)
         errors: list[str] = []
         sent = 0
@@ -316,12 +326,13 @@ class PubmedIngestion:
                         json=payload,
                         timeout=aiohttp.ClientTimeout(total=30),
                     ) as resp:
-                        if resp.status == 200:
+                        if resp.status == HTTP_OK:
                             sent += 1
                         else:
                             body = await resp.text()
                             errors.append(
-                                f"PMID {payload['pmid']}: HTTP {resp.status} - {body[:200]}"
+                                f"PMID {payload['pmid']}: "
+                                f"HTTP {resp.status} - {body[:200]}"
                             )
                 except asyncio.TimeoutError:
                     errors.append(f"PMID {payload['pmid']}: timeout")
@@ -365,7 +376,9 @@ class PubmedIngestion:
                 total_sent += sent
                 all_errors.extend(errors)
                 batch_num = i // self.config.batch_size + 1
-                total_batches = (len(payloads) + self.config.batch_size - 1) // self.config.batch_size
+                total_batches = (
+                    len(payloads) + self.config.batch_size - 1
+                ) // self.config.batch_size
                 logger.info(
                     f"Batch {batch_num}/{total_batches}: "
                     f"{sent}/{len(batch)} sent, {len(errors)} errors"
@@ -380,9 +393,7 @@ class PubmedIngestion:
             errors=all_errors[:20],
         )
 
-        logger.info(
-            f"Ingestion complete: {total_sent} sent, {len(all_errors)} failed"
-        )
+        logger.info(f"Ingestion complete: {total_sent} sent, {len(all_errors)} failed")
         return result
 
     async def run_streaming(self) -> IngestionResult:
@@ -418,8 +429,7 @@ class PubmedIngestion:
                 total_sent += sent
                 all_errors.extend(errors)
                 logger.info(
-                    f"Batch {batch_num}: "
-                    f"{sent}/{len(batch)} sent, {len(errors)} errors"
+                    f"Batch {batch_num}: {sent}/{len(batch)} sent, {len(errors)} errors"
                 )
 
         result = IngestionResult(

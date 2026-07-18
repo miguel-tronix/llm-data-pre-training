@@ -26,7 +26,7 @@ dependencies = [
     "ftfy", # For fixing Unicode and text cleaning
     "ruff>=0.15.6",
     "types-tqdm>=4.67.3.20260408",
-    "mypy>=2.1.0",
+    "mypy>=1.7.0",
 ]
 
 [project.optional-dependencies]
@@ -81,6 +81,7 @@ exclude = [
     "dist",
     "node_modules",
     "venv",
+    "tests",
 ]
 
 [tool.ruff.lint.mccabe]
@@ -106,6 +107,12 @@ disallow_untyped_decorators = true
 no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
+exclude = [
+  "tests",
+  "venv",
+  ".venv",
+  ".git",
+]
 
 [project.scripts]
 pipeline = "llm_data_pretraining.cli.commands:app"

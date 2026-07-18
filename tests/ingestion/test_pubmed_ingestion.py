@@ -1,9 +1,9 @@
 import asyncio
 import json
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 import pytest
@@ -19,9 +19,21 @@ from llm_data_pretraining.ingestion.pubmed_ingestion import (
 @pytest.fixture
 def tmp_jsonl() -> Iterator[Path]:
     records = [
-        {"id": "1", "text": "This is a clinical trial about drug efficacy.", "title": "Trial 1"},
-        {"id": "2", "text": "A study about the history of mathematics.", "title": "Math 1"},
-        {"id": "3", "text": "Randomized placebo-controlled study on dosage.", "title": ""},
+        {
+            "id": "1",
+            "text": "This is a clinical trial about drug efficacy.",
+            "title": "Trial 1",
+        },
+        {
+            "id": "2",
+            "text": "A study about the history of mathematics.",
+            "title": "Math 1",
+        },
+        {
+            "id": "3",
+            "text": "Randomized placebo-controlled study on dosage.",
+            "title": "",
+        },
     ]
     with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
         for rec in records:
@@ -165,7 +177,9 @@ class TestPubmedIngestion:
             (None, False),
         ],
     )
-    def test_is_medical_intervention(self, config: PubmedIngestionConfig, text: str, expected: bool) -> None:
+    def test_is_medical_intervention(
+        self, config: PubmedIngestionConfig, text: str, expected: bool
+    ) -> None:
         ingestion = PubmedIngestion(config)
         assert ingestion.is_medical_intervention(text) is expected
 
@@ -179,13 +193,17 @@ class TestPubmedIngestion:
         assert "3" in ids
         assert "2" not in ids
 
-    def test_filter_records_no_filter(self, config_no_filter: PubmedIngestionConfig) -> None:
+    def test_filter_records_no_filter(
+        self, config_no_filter: PubmedIngestionConfig
+    ) -> None:
         ingestion = PubmedIngestion(config_no_filter)
         records = ingestion.load_records()
         filtered = ingestion.filter_records(records)
         assert len(filtered) == 3
 
-    def test_filter_records_fallback_to_abstract_text(self, config: PubmedIngestionConfig) -> None:
+    def test_filter_records_fallback_to_abstract_text(
+        self, config: PubmedIngestionConfig
+    ) -> None:
         ingestion = PubmedIngestion(config)
         records = [{"abstract_text": "clinical trial results"}]
         filtered = ingestion.filter_records(records)
@@ -194,13 +212,18 @@ class TestPubmedIngestion:
     @pytest.mark.parametrize(
         "text,expected",
         [
-            ("The study was conclusive. It showed results.", "The study was conclusive."),
+            (
+                "The study was conclusive. It showed results.",
+                "The study was conclusive.",
+            ),
             ("No punctuation here", "No punctuation here"),
             ("First sentence. Second sentence. Third.", "First sentence."),
             ("Short", "Short"),
         ],
     )
-    def test_extract_title(self, config: PubmedIngestionConfig, text: str, expected: str) -> None:
+    def test_extract_title(
+        self, config: PubmedIngestionConfig, text: str, expected: str
+    ) -> None:
         ingestion = PubmedIngestion(config)
         assert ingestion._extract_title(text) == expected
 
@@ -218,25 +241,37 @@ class TestPubmedIngestion:
         ]
         payloads = ingestion.prepare_payloads(records)
         assert len(payloads) == 2
-        assert payloads[0] == {"pmid": "100", "title": "My Title", "abstract": "Abstract text here."}
+        assert payloads[0] == {
+            "pmid": "100",
+            "title": "My Title",
+            "abstract": "Abstract text here.",
+        }
         assert payloads[1]["pmid"] == "200"
         assert payloads[1]["abstract"] == "Another abstract."
 
-    def test_prepare_payloads_skips_missing_pmid(self, config: PubmedIngestionConfig) -> None:
+    def test_prepare_payloads_skips_missing_pmid(
+        self, config: PubmedIngestionConfig
+    ) -> None:
         ingestion = PubmedIngestion(config)
         records = [{"text": "No id here"}]
         payloads = ingestion.prepare_payloads(records)
         assert len(payloads) == 0
 
-    def test_prepare_payloads_skips_empty_abstract(self, config: PubmedIngestionConfig) -> None:
+    def test_prepare_payloads_skips_empty_abstract(
+        self, config: PubmedIngestionConfig
+    ) -> None:
         ingestion = PubmedIngestion(config)
         records = [{"id": "1", "text": ""}]
         payloads = ingestion.prepare_payloads(records)
         assert len(payloads) == 0
 
-    def test_prepare_payloads_extracts_title_when_missing(self, config: PubmedIngestionConfig) -> None:
+    def test_prepare_payloads_extracts_title_when_missing(
+        self, config: PubmedIngestionConfig
+    ) -> None:
         ingestion = PubmedIngestion(config)
-        records = [{"id": "1", "text": "First sentence. Rest of abstract.", "title": ""}]
+        records = [
+            {"id": "1", "text": "First sentence. Rest of abstract.", "title": ""}
+        ]
         payloads = ingestion.prepare_payloads(records)
         assert payloads[0]["title"] == "First sentence."
 
@@ -466,12 +501,15 @@ class TestIterRecords:
 
     def test_is_generator(self, config: PubmedIngestionConfig) -> None:
         import types
+
         ingestion = PubmedIngestion(config)
         assert isinstance(ingestion.iter_records(), types.GeneratorType)
 
 
 class TestIterPayloadBatches:
-    def test_yields_batches_of_correct_size(self, config: PubmedIngestionConfig) -> None:
+    def test_yields_batches_of_correct_size(
+        self, config: PubmedIngestionConfig
+    ) -> None:
         ingestion = PubmedIngestion(config)
         batches = list(ingestion.iter_payload_batches())
         assert len(batches) == 1
@@ -509,7 +547,9 @@ class TestIterPayloadBatches:
         total_payloads = sum(len(b) for b, _ in batches)
         assert total_payloads == 2
 
-    def test_no_filtering_when_disabled(self, config_no_filter: PubmedIngestionConfig) -> None:
+    def test_no_filtering_when_disabled(
+        self, config_no_filter: PubmedIngestionConfig
+    ) -> None:
         ingestion = PubmedIngestion(config_no_filter)
         batches = list(ingestion.iter_payload_batches())
         total_payloads = sum(len(b) for b, _ in batches)
@@ -545,7 +585,16 @@ class TestIterPayloadBatches:
 
     def test_extracts_title_when_missing(self) -> None:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
-            f.write(json.dumps({"id": "1", "text": "First sentence. Rest of abstract.", "title": ""}) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "id": "1",
+                        "text": "First sentence. Rest of abstract.",
+                        "title": "",
+                    }
+                )
+                + "\n"
+            )
             path = Path(f.name)
         try:
             cfg = PubmedIngestionConfig(
@@ -620,7 +669,9 @@ class TestRunStreaming:
         assert result.failed_records == 0
 
     @pytest.mark.asyncio
-    async def test_streaming_with_filtering(self, config: PubmedIngestionConfig) -> None:
+    async def test_streaming_with_filtering(
+        self, config: PubmedIngestionConfig
+    ) -> None:
         class MockResponse:
             status: int = 200
 

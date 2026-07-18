@@ -178,7 +178,7 @@ def tokenize(
 
 
 @app.command()
-def ingest(
+def ingest(  # noqa: PLR0913
     jsonl_path: Annotated[Path, typer.Argument(help="Cleaned PubMed JSONL file")],
     deepdive_url: Annotated[
         str, typer.Option(help="DeepDive API base URL")
