@@ -58,7 +58,10 @@ class ParallelZstdJsonlReader:
                                 pass
                 else:
                     # Parallel processing
-                    with ProcessPoolExecutor(max_workers=self.num_processes) as executor:
+                    with ProcessPoolExecutor(
+                        max_workers=self.num_processes
+                    ) as executor:
+
                         def batch_generator() -> Iterator[list[str]]:
                             batch = []
                             for line in text_stream:

@@ -3,11 +3,11 @@ from pathlib import Path
 
 import numpy as np
 from pydantic import BaseModel, Field, field_validator
-from tokenizers import Tokenizer  # type: ignore[import-untyped]
-from tokenizers.models import BPE  # type: ignore[import-untyped]
-from tokenizers.pre_tokenizers import Whitespace  # type: ignore[import-untyped]
-from tokenizers.processors import TemplateProcessing  # type: ignore[import-untyped]
-from tokenizers.trainers import BpeTrainer  # type: ignore[import-untyped]
+from tokenizers import Tokenizer
+from tokenizers.models import BPE
+from tokenizers.pre_tokenizers import Whitespace
+from tokenizers.processors import TemplateProcessing
+from tokenizers.trainers import BpeTrainer
 from tqdm import tqdm
 
 from llm_data_pretraining.extraction.configs import PipelineType

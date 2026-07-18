@@ -1,0 +1,81 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pubmed-ingestor-job
+  namespace: deepdive
+  labels:
+    app: deepdive
+    component: pubmed-ingestor
+spec:
+  template:
+    metadata:
+      labels:
+        app: deepdive
+        component: pubmed-ingestor
+    spec:
+      shareProcessNamespace: true
+      containers:
+        - name: ingestor
+          image: localhost:32000/llm/ingestion/pubmed-ingestor:0.1.2
+          envFrom:
+            - configMapRef:
+                name: pubmed-ingestor-config
+          volumeMounts:
+            - name: data-volume
+              mountPath: /opt/llm-data-pretraining/data
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+        - name: tls-proxy
+          image: nginx:alpine
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              nginx -g 'daemon off;' &
+              NGINX_PID=$!
+              # Wait for the main container (ingestor) to start and then exit
+              # Since we share the process namespace, we can see the ingestor process
+              while ! pgrep -f "pubmed_ingestor.cli" > /dev/null; do sleep 1; done
+              while pgrep -f "pubmed_ingestor.cli" | wc -l > 1 > /dev/null; do sleep 2; done
+              echo "Main process finished, exiting sidecar..."
+              kill -11 $NGINX_PID
+              wait $NGINX_PID
+          volumeMounts:
+            - name: client-certs
+              mountPath: /etc/nginx/certs
+              readOnly: true
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx-egress.conf
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+      restartPolicy: OnFailure
+      securityContext:
+        fsGroup: 1000
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: llm-data-pvc
+        - name: client-certs
+          secret:
+            secretName: deepdive-tls-certs
+            items:
+              - key: client.crt
+                path: client.crt
+              - key: client.key
+                path: client.key
+              - key: ca.crt
+                path: ca.crt
+        - name: nginx-config
+          configMap:
+            name: ingestor-nginx-tls
+  backoffLimit: 4

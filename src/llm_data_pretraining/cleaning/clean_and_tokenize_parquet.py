@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import pyarrow as pa  # type: ignore[import-untyped]
-import pyarrow.parquet as pq  # type: ignore[import-untyped]
+import pyarrow as pa
+import pyarrow.parquet as pq
 from datasets import Dataset  # type: ignore[import-untyped]
 from torch.utils.data import DataLoader  # type: ignore[import-not-found]
 from transformers import AutoTokenizer  # type: ignore[import-not-found]

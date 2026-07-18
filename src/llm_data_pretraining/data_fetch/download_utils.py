@@ -2,7 +2,6 @@ import asyncio
 import functools
 import os
 import re
-import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -18,9 +17,12 @@ from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 logger = get_pipeline_logger()
 
+HTTP_PARTIAL_CONTENT = 206
+MB_100 = 100 * 1024 * 1024
+MB_500 = 500 * 1024 * 1024
+
 
 # --- Top-level worker function for multiprocessing ---
-# NOTE: The signature has been reordered for compatibility with functools.partial
 def _download_chunk_process(
     url: str,
     chunk_size: int,
@@ -35,65 +37,85 @@ def _download_chunk_process(
     start_byte = kwargs.get("start_byte", 0)
     end_byte = kwargs.get("end_byte", 0)
     part_path = kwargs.get("part_path", "")
-    for attempt in range(max_retries):
-        try:
-            start_offset = 0
-            if part_path.exists():
-                start_offset = part_path.stat().st_size
 
-            expected_size = end_byte - start_byte + 1
-            if start_offset >= expected_size:
-                return True  # Chunk is already complete
-
-            headers = {
-                "Range": f"bytes={start_byte + start_offset}-{end_byte}",
-                "Accept-Encoding": "identity",  # Prevent transparent decompression
-            }
-
-            with requests.get(
-                url, headers=headers, stream=True, timeout=timeout
-            ) as response:
-                response.raise_for_status()
-
-                # If we requested a range, the server must return 206 Partial Content.
-                # If it returns 200 OK, it ignored the Range header and is sending the whole file.
-                if start_offset > 0 and response.status_code != 206:
-                    logger.warning(
-                        f"Server returned status {response.status_code} "
-                        f"instead of 206 for Range request. Retrying..."
-                    )
-                    continue
-
-                mode = "ab" if start_offset > 0 else "wb"
-                with open(part_path, mode) as f:
-                    # Use raw stream to avoid ANY transparent decoding by requests
-                    for chunk in response.raw.stream(chunk_size, decode_content=False):
-                        if chunk:
-                            f.write(chunk)
-
-                if part_path.stat().st_size == expected_size:
-                    return True
-                else:
-                    logger.warning(f"Chunk {part_path.name} size mismatch. Retrying...")
-                    continue
-
-        except requests.exceptions.RequestException as e:
-            logger.warning(
-                f"Error downloading chunk {part_path.name} \
-                (attempt {attempt + 1}/{max_retries}): {e}"
-            )
-            if attempt < max_retries - 1:
-                time.sleep(2**attempt)
-        except Exception as e:
-            logger.error(
-                f"An unexpected error occurred in worker for {part_path.name}: {e}"
-            )
-            break
+    backoff = 1
+    for _attempt in range(max_retries):
+        chunk_complete = _download_chunk_attempt(
+            url, chunk_size, timeout, start_byte, end_byte, part_path, backoff
+        )
+        if chunk_complete:
+            return True
+        backoff *= 2
 
     logger.error(
         f"Failed to download chunk {part_path.name} after {max_retries} attempts."
     )
     return False
+
+
+def _download_chunk_attempt(
+    url: str,
+    chunk_size: int,
+    timeout: int,
+    start_byte: int,
+    end_byte: int,
+    part_path: Path,
+    backoff: float,
+) -> bool | None:
+    """
+    Single attempt to download a file chunk.
+    Returns True on success, False on failure, None to retry.
+    """
+    try:
+        start_offset = 0
+        if part_path.exists():
+            start_offset = part_path.stat().st_size
+
+        expected_size = end_byte - start_byte + 1
+        if start_offset >= expected_size:
+            return True
+
+        headers = {
+            "Range": f"bytes={start_byte + start_offset}-{end_byte}",
+            "Accept-Encoding": "identity",
+        }
+
+        response = requests.get(url, headers=headers, stream=True, timeout=timeout)
+        try:
+            response.raise_for_status()
+
+            if start_offset > 0 and response.status_code != HTTP_PARTIAL_CONTENT:
+                logger.warning(
+                    f"Server returned {response.status_code} "
+                    f"instead of {HTTP_PARTIAL_CONTENT}. Retrying..."
+                )
+                return None
+
+            mode = "ab" if start_offset > 0 else "wb"
+            with open(part_path, mode) as f:
+                for chunk in response.raw.stream(chunk_size, decode_content=False):
+                    if chunk:
+                        f.write(chunk)
+
+            actual_size = part_path.stat().st_size
+            if actual_size == expected_size:
+                return True
+            logger.warning(
+                f"Chunk {part_path.name} size mismatch ({actual_size}/{expected_size})."
+            )
+            return None
+        finally:
+            response.close()
+
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Error downloading chunk {part_path.name} (attempt): {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error for {part_path.name}: {e}")
+        return False
+
+
+# ruff: noqa: PLR0913
 
 
 # --- Pydantic V2 Models ---
@@ -274,21 +296,24 @@ class HFDatasetDownloader:
                 self.config.timeout,
             )
 
-            # NOTE: Corrected run_in_executor call with positional arguments
-            tasks = [
-                loop.run_in_executor(
-                    executor,
-                    functools.partial(
-                        worker_func,
-                        part_path=local_path.with_name(f"{local_path.name}.part{i}"),
-                        start_byte=start,
-                        end_byte=end,
-                    ),
-                )
-                for i, (start, end) in enumerate(ranges)
-            ]
-
-            results = await asyncio.gather(*tasks)
+            results = await asyncio.gather(
+                *[
+                    asyncio.wrap_future(
+                        loop.run_in_executor(
+                            executor,
+                            functools.partial(
+                                worker_func,
+                                part_path=local_path.with_name(
+                                    f"{local_path.name}.part{i}"
+                                ),
+                                start_byte=start,
+                                end_byte=end,
+                            ),
+                        )
+                    )
+                    for i, (start, end) in enumerate(ranges)
+                ]
+            )
 
         if all(results):
             await self._merge_parts(local_path, num_parts)
