@@ -21,10 +21,6 @@ HTTP_PARTIAL_CONTENT = 206
 MB_100 = 100 * 1024 * 1024
 MB_500 = 500 * 1024 * 1024
 
-HTTP_PARTIAL_CONTENT = 206
-MB_100 = 100 * 1024 * 1024
-MB_500 = 500 * 1024 * 1024
-
 
 # --- Top-level worker function for multiprocessing ---
 def _download_chunk_process(
@@ -83,14 +79,7 @@ def _download_chunk_attempt(
             "Range": f"bytes={start_byte + start_offset}-{end_byte}",
             "Accept-Encoding": "identity",
         }
-        headers = {
-            "Range": f"bytes={start_byte + start_offset}-{end_byte}",
-            "Accept-Encoding": "identity",
-        }
 
-        response = requests.get(url, headers=headers, stream=True, timeout=timeout)
-        try:
-            response.raise_for_status()
         response = requests.get(url, headers=headers, stream=True, timeout=timeout)
         try:
             response.raise_for_status()
@@ -111,9 +100,6 @@ def _download_chunk_attempt(
             actual_size = part_path.stat().st_size
             if actual_size == expected_size:
                 return True
-            actual_size = part_path.stat().st_size
-            if actual_size == expected_size:
-                return True
             logger.warning(
                 f"Chunk {part_path.name} size mismatch ({actual_size}/{expected_size})."
             )
@@ -127,9 +113,6 @@ def _download_chunk_attempt(
     except Exception as e:
         logger.error(f"Unexpected error for {part_path.name}: {e}")
         return False
-
-
-# ruff: noqa: PLR0913
 
 
 # ruff: noqa: PLR0913
@@ -313,24 +296,6 @@ class HFDatasetDownloader:
                 self.config.timeout,
             )
 
-            results = await asyncio.gather(
-                *[
-                    asyncio.wrap_future(
-                        loop.run_in_executor(
-                            executor,
-                            functools.partial(
-                                worker_func,
-                                part_path=local_path.with_name(
-                                    f"{local_path.name}.part{i}"
-                                ),
-                                start_byte=start,
-                                end_byte=end,
-                            ),
-                        )
-                    )
-                    for i, (start, end) in enumerate(ranges)
-                ]
-            )
             results = await asyncio.gather(
                 *[
                     asyncio.wrap_future(

@@ -23,10 +23,6 @@ from llm_data_pretraining.ingestion.pubmed_ingestion import (
     PubmedIngestion,
     PubmedIngestionConfig,
 )
-from llm_data_pretraining.ingestion.pubmed_ingestion import (
-    PubmedIngestion,
-    PubmedIngestionConfig,
-)
 from llm_data_pretraining.training.tokenization import BPETokenizer, TokenizerConfig
 
 app = typer.Typer(help="LLM Data Pretraining Pipeline CLI")
@@ -182,7 +178,7 @@ def tokenize(
 
 
 @app.command()
-def ingest(
+def ingest(  # noqa: PLR0913
     jsonl_path: Annotated[Path, typer.Argument(help="Cleaned PubMed JSONL file")],
     deepdive_url: Annotated[
         str, typer.Option(help="DeepDive API base URL")
