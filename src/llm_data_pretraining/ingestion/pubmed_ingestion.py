@@ -12,8 +12,6 @@ from llm_data_pretraining.utils.pipeline_logger import get_pipeline_logger
 
 logger = get_pipeline_logger()
 
-HTTP_OK = 200
-
 INTERVENTION_PATTERNS: list[re.Pattern] = [
     re.compile(r, re.IGNORECASE)
     for r in [
@@ -183,7 +181,7 @@ class PubmedIngestion:
             raise RuntimeError("Session not initialised. Use async with or call run()")
         return self._session
 
-    async def __aenter__(self) -> "PubmedIngestion":
+    async def __aenter__(self):
         self._session = aiohttp.ClientSession()
         return self
 
@@ -196,23 +194,19 @@ class PubmedIngestion:
         records: list[dict[str, Any]] = []
         with open(self.config.jsonl_path, encoding="utf-8") as f:
             for line in f:
-                stripped = line.strip()
-                if stripped:
-                    records.append(json.loads(stripped))
+                if line.strip():
+                    records.append(json.loads(line.strip()))
         return records
 
     def iter_records(self) -> Iterator[dict[str, Any]]:
         with open(self.config.jsonl_path, encoding="utf-8") as f:
             for line in f:
-                stripped = line.strip()
-                if not stripped:
+                if not line.strip():
                     continue
                 try:
-                    yield json.loads(stripped)
+                    yield json.loads(line.strip())
                 except json.JSONDecodeError:
-                    logger.warning(
-                        f"Skipping incomplete line at EOF: {stripped[:120]}..."
-                    )
+                    logger.warning(f"Skipping incomplete line at EOF: {line[:120]}...")
                     break
 
     def iter_payload_batches(
@@ -326,13 +320,13 @@ class PubmedIngestion:
                         json=payload,
                         timeout=aiohttp.ClientTimeout(total=30),
                     ) as resp:
-                        if resp.status == HTTP_OK:
+                        if resp.status == aiohttp.success:
                             sent += 1
                         else:
                             body = await resp.text()
                             errors.append(
-                                f"PMID {payload['pmid']}: "
-                                f"HTTP {resp.status} - {body[:200]}"
+                                f"PMID {payload['pmid']}: \
+                                 HTTP {resp.status} - {body[:200]}"
                             )
                 except asyncio.TimeoutError:
                     errors.append(f"PMID {payload['pmid']}: timeout")

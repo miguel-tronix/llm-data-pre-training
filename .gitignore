@@ -1,6 +1,10 @@
 #UV stuff
 uv.lock
 
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
